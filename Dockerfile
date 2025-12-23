@@ -1,6 +1,3 @@
-# プロジェクトルートからビルドする場合のDockerfile
-# 使用方法: docker build -f Dockerfile -t gym-reservation .
-
 # Python 3.11 のベースイメージを使用
 FROM python:3.11-slim
 
@@ -13,26 +10,25 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PIP_NO_CACHE_DIR=1 \
     PIP_DISABLE_PIP_VERSION_CHECK=1
 
-# システムの依存パッケージをインストール（必要に応じて）
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    && rm -rf /var/lib/apt/lists/*
-
 # requirements.txtをコピーしてパッケージをインストール
+# パスを /app/requirements.txt に固定します
 COPY backend/requirements.txt /app/requirements.txt
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir -r /app/requirements.txt
 
-# バックエンドアプリケーションコードをコピー
+# アプリケーションコードをコピー
+# main.py があるディレクトリを正しくコピーします
 COPY backend/app /app/app
-
-# フロントエンドファイルをコピー（静的ファイルとして配信する場合）
+# frontendもコピー
 COPY frontend /app/frontend
 
-# ポート8000を公開
-EXPOSE 8000
+# Cloud Run のデフォルトポート 8080 を公開設定にする
+EXPOSE 8080
 
-# ヘルスチェック
+# ヘルスチェックのポートも 8080 に変更
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-    CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')" || exit 1
+    CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8080/health')" || exit 1
 
-# uvicornでアプリケーションを起動
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+# 重要：uvicornの起動コマンド
+# 1. ポートを 8080 に変更
+# 2. main.py の場所（app/main.py なら app.main:app）を正しく指定
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8080"]
