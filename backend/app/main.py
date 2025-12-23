@@ -6,6 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 import os
+import uvicorn
 
 app = FastAPI(
     title="ジム予約管理システム API",
@@ -52,3 +53,8 @@ def serve_index():
         return FileResponse(index_path)
     return {"error": "Frontend not found"}
 
+if __name__ == "__main__":
+    # Cloud Run が指定するポート番号を取得（デフォルトは 8080）
+    port = int(os.environ.get("PORT", 8080))
+    # すべてのIPアドレス（0.0.0.0）で、指定されたポートで起動
+    uvicorn.run(app, host="0.0.0.0", port=port)
