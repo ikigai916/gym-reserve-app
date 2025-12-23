@@ -8,19 +8,22 @@
     <script defer src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js"></script>
 </head>
 <body class="bg-gray-100 min-h-screen p-8">
-    <div x-data="{ 
-        message: '読込中...', 
-        async init() { 
-            // さっき疎通確認したAPIを叩く
-            const res = await fetch('/health');
-            const data = await res.json();
-            this.message = 'システム稼働中: ' + data.status;
-        }
-    }" class="max-w-md mx-auto bg-white rounded-xl shadow-md overflow-hidden md:max-w-2xl p-6">
+    <div x-data="app()" class="max-w-md mx-auto bg-white rounded-xl shadow-md overflow-hidden md:max-w-2xl p-6">
         
-        <h1 class="text-2xl font-bold text-gray-800 mb-4">🏋️ ジム予約カレンダー</h1>
+        <div class="flex justify-between items-center mb-4">
+            <h1 class="text-2xl font-bold text-gray-800">🏋️ ジム予約カレンダー</h1>
+            <div class="flex items-center gap-2">
+                <span x-show="userName" class="text-sm text-gray-600" x-text="'ようこそ、' + userName + 'さん'"></span>
+                <button @click="handleLogout" class="text-sm text-blue-600 hover:text-blue-800">ログアウト</button>
+            </div>
+        </div>
         
-        <p class="text-sm text-green-600 mb-6 font-mono" x-text="message"></p>
+        <div x-show="!userId" class="mb-4 p-4 bg-yellow-100 border border-yellow-400 rounded-lg">
+            <p class="text-sm text-yellow-800">ログインが必要です。</p>
+            <a href="/login.html" class="text-blue-600 hover:text-blue-800 text-sm underline">ログインページへ</a>
+        </div>
+        
+        <p x-show="userId" class="text-sm text-green-600 mb-6 font-mono">システム稼働中</p>
 
         <div class="grid grid-cols-7 gap-2 mb-4 text-center text-xs font-bold text-gray-500">
             <div>日</div><div>月</div><div>火</div><div>水</div><div>木</div><div>金</div><div>土</div>
@@ -42,5 +45,58 @@
             </button>
         </div>
     </div>
+
+    <script>
+        const USER_ID_KEY = 'gym_reservation_user_id';
+        const USER_NAME_KEY = 'gym_reservation_user_name';
+
+        function getUserId() {
+            return localStorage.getItem(USER_ID_KEY);
+        }
+
+        function getUserName() {
+            return localStorage.getItem(USER_NAME_KEY);
+        }
+
+        function removeUserId() {
+            localStorage.removeItem(USER_ID_KEY);
+            localStorage.removeItem(USER_NAME_KEY);
+        }
+
+        function app() {
+            return {
+                userId: null,
+                userName: '',
+                message: '読込中...',
+                
+                async init() {
+                    this.userId = getUserId();
+                    this.userName = getUserName() || '';
+                    
+                    // ログインしていない場合はログインページにリダイレクト
+                    if (!this.userId) {
+                        window.location.href = '/login.html';
+                        return;
+                    }
+                    
+                    // ヘルスチェック
+                    try {
+                        const res = await fetch('/health');
+                        const data = await res.json();
+                        this.message = 'システム稼働中: ' + data.status;
+                    } catch (err) {
+                        this.message = 'システム接続エラー';
+                    }
+                },
+                
+                handleLogout() {
+                    if (confirm('ログアウトしますか？')) {
+                        removeUserId();
+                        window.location.href = '/login.html';
+                    }
+                }
+            };
+        }
+    </script>
 </body>
 </html>

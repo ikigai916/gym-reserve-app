@@ -1,12 +1,17 @@
 """
 FastAPI アプリケーション - 最小構成
 """
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
+from typing import List
 import os
 import uvicorn
+from datetime import datetime
+
+from app.schemas import UserCreate, UserResponse
+from app.storage import load_users, save_users
 
 app = FastAPI(
     title="ジム予約管理システム API",
@@ -52,6 +57,56 @@ def serve_index():
     if os.path.exists(index_path):
         return FileResponse(index_path)
     return {"error": "Frontend not found"}
+
+@app.get("/login.html")
+def serve_login():
+    """ログインページを配信（開発用）"""
+    login_path = os.path.join(frontend_path, "login.html")
+    if os.path.exists(login_path):
+        return FileResponse(login_path)
+    return {"error": "Login page not found"}
+
+# ユーザー作成API
+@app.post("/api/users", response_model=UserResponse)
+def create_user(user: UserCreate):
+    """ユーザーを作成または取得"""
+    if not user.name or not user.name.strip():
+        raise HTTPException(status_code=400, detail="名前は必須です")
+    
+    users = load_users()
+    
+    # メールアドレスがある場合、重複チェック
+    if user.email:
+        existing_user = next((u for u in users if u.get("email") == user.email), None)
+        if existing_user:
+            raise HTTPException(status_code=409, detail="このメールアドレスは既に登録されています")
+    
+    # 新規ユーザーを作成
+    new_user = {
+        "id": str(int(datetime.now().timestamp() * 1000)),  # ミリ秒タイムスタンプをIDとして使用
+        "name": user.name.strip(),
+        "email": user.email.strip() if user.email else "",
+        "phone": user.phone.strip() if user.phone else "",
+        "createdAt": datetime.now().isoformat(),
+        "updatedAt": datetime.now().isoformat()
+    }
+    
+    users.append(new_user)
+    save_users(users)
+    
+    return UserResponse(**new_user)
+
+# ユーザー取得API
+@app.get("/api/users/{user_id}", response_model=UserResponse)
+def get_user(user_id: str):
+    """ユーザー情報を取得"""
+    users = load_users()
+    user = next((u for u in users if u.get("id") == user_id), None)
+    
+    if not user:
+        raise HTTPException(status_code=404, detail="ユーザーが見つかりません")
+    
+    return UserResponse(**user)
 
 if __name__ == "__main__":
     # Cloud Run が指定するポート番号を取得（デフォルトは 8080）
