@@ -1,0 +1,132 @@
+/**
+ * Alpine.js アプリケーション
+ * ジム予約管理システムのメインロジック
+ */
+
+const API_BASE = 'http://localhost:8000/api';
+
+function app() {
+    return {
+        activeTab: 'reserve',
+        error: '',
+        success: '',
+        userId: null,
+        user: null,
+        reservations: [],
+        timeSlots: [],
+        selectedDate: new Date().toISOString().split('T')[0],
+        
+        // フォーム状態
+        editName: '',
+        editEmail: '',
+        editPhone: '',
+
+        async init() {
+            // ローカルストレージからユーザーIDを読み込む
+            this.userId = getUserId();
+            
+            if (this.userId) {
+                await this.loadUser();
+            }
+        },
+
+        async loadUser() {
+            if (!this.userId) return;
+            
+            try {
+                const response = await fetch(`${API_BASE}/users/${this.userId}`);
+                if (response.ok) {
+                    this.user = await response.json();
+                    this.editName = this.user.name;
+                    this.editEmail = this.user.email || '';
+                    this.editPhone = this.user.phone || '';
+                }
+            } catch (err) {
+                console.error('ユーザー情報の読み込みに失敗しました', err);
+            }
+        },
+
+        async loadTimeSlots(date) {
+            // TODO: 時間枠を読み込むAPIを呼び出す
+            try {
+                const url = this.userId 
+                    ? `${API_BASE}/time-slots/${date}?userId=${this.userId}`
+                    : `${API_BASE}/time-slots/${date}`;
+                const response = await fetch(url);
+                const data = await response.json();
+                this.timeSlots = data.timeSlots || [];
+            } catch (err) {
+                this.error = '時間枠の読み込みに失敗しました';
+                console.error(err);
+            }
+        },
+
+        async loadMyReservations() {
+            // TODO: 自分の予約を読み込むAPIを呼び出す
+            if (!this.userId) return;
+            
+            try {
+                const response = await fetch(`${API_BASE}/reservations?userId=${this.userId}`);
+                const data = await response.json();
+                this.reservations = data.reservations || [];
+            } catch (err) {
+                this.error = '予約の読み込みに失敗しました';
+                console.error(err);
+            }
+        },
+
+        async saveUserInfo() {
+            // TODO: ユーザー情報を保存するAPIを呼び出す
+            if (!this.editName.trim()) {
+                this.error = '名前は必須です';
+                return;
+            }
+
+            try {
+                let response;
+                if (this.userId) {
+                    // 更新
+                    response = await fetch(`${API_BASE}/users/${this.userId}`, {
+                        method: 'PUT',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            name: this.editName.trim(),
+                            email: this.editEmail.trim(),
+                            phone: this.editPhone.trim(),
+                        }),
+                    });
+                } else {
+                    // 新規作成
+                    response = await fetch(`${API_BASE}/users`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            name: this.editName.trim(),
+                            email: this.editEmail.trim(),
+                            phone: this.editPhone.trim(),
+                        }),
+                    });
+                }
+
+                const data = await response.json();
+                if (!response.ok) {
+                    this.error = data.error || '保存に失敗しました';
+                    return;
+                }
+
+                this.userId = data.id;
+                setUserId(data.id);
+                this.user = data;
+                this.success = 'ユーザー情報を保存しました';
+            } catch (err) {
+                this.error = '保存に失敗しました';
+                console.error(err);
+            }
+        },
+
+        getToday() {
+            return new Date().toISOString().split('T')[0];
+        },
+    };
+}
+

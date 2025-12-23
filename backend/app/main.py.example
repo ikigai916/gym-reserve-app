@@ -1,0 +1,39 @@
+"""
+FastAPI アプリケーションのエントリーポイント
+"""
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+
+app = FastAPI(
+    title="ジム予約管理システム API",
+    description="ジムの予約を管理するAPI",
+    version="1.0.0"
+)
+
+# CORS設定
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "http://localhost:3000",
+        "http://127.0.0.1:3000",
+    ],  # フロントエンドのURL
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+@app.get("/")
+def read_root():
+    """ルートエンドポイント"""
+    return {"message": "ジム予約管理システム API", "version": "1.0.0"}
+
+@app.get("/health")
+def health_check():
+    """ヘルスチェックエンドポイント"""
+    return {"status": "ok"}
+
+# TODO: ルーターを追加
+# from app.routers import reservations, users
+# app.include_router(reservations.router, prefix="/api/reservations", tags=["reservations"])
+# app.include_router(users.router, prefix="/api/users", tags=["users"])
+

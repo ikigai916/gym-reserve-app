@@ -1,0 +1,9 @@
+/** @type {import('next').NextConfig} */
+const nextConfig = {
+  // Cloud Runで動作させるための設定
+  output: 'standalone', // Dockerイメージを小さくするために必要
+  // その他の設定
+}
+
+module.exports = nextConfig
+

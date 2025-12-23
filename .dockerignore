@@ -1,0 +1,45 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+env/
+ENV/
+.venv
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# データファイル（本番では外部ストレージを使用）
+data/*.json
+!data/.gitkeep
+
+# ログ
+*.log
+
+# 環境変数
+.env
+.env.local
+
+# Git
+.git
+.gitignore
+
+# ドキュメント
+*.md
+!README.md
+
+# テスト
+.pytest_cache/
+.coverage
+htmlcov/
+
+# その他
+.DS_Store
+node_modules/
