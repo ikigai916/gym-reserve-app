@@ -3,32 +3,43 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ジム予約管理システム</title>
-    <!-- Tailwind CSS CDN -->
+    <title>ジム予約システム</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <!-- Alpine.js CDN -->
-    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+    <script defer src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js"></script>
 </head>
-<body class="bg-gray-50">
-    <div x-data="{ message: 'Hello World' }" class="min-h-screen flex items-center justify-center">
-        <div class="bg-white rounded-lg shadow-lg p-8 max-w-md w-full">
-            <h1 class="text-3xl font-bold text-center mb-4 text-gray-800">
-                🏋️ ジム予約管理システム
-            </h1>
-            <div class="text-center">
-                <p class="text-xl text-gray-600 mb-4" x-text="message"></p>
+<body class="bg-gray-100 min-h-screen p-8">
+    <div x-data="{ 
+        message: '読込中...', 
+        async init() { 
+            // さっき疎通確認したAPIを叩く
+            const res = await fetch('/health');
+            const data = await res.json();
+            this.message = 'システム稼働中: ' + data.status;
+        }
+    }" class="max-w-md mx-auto bg-white rounded-xl shadow-md overflow-hidden md:max-w-2xl p-6">
+        
+        <h1 class="text-2xl font-bold text-gray-800 mb-4">🏋️ ジム予約カレンダー</h1>
+        
+        <p class="text-sm text-green-600 mb-6 font-mono" x-text="message"></p>
+
+        <div class="grid grid-cols-7 gap-2 mb-4 text-center text-xs font-bold text-gray-500">
+            <div>日</div><div>月</div><div>火</div><div>水</div><div>木</div><div>金</div><div>土</div>
+        </div>
+
+        <div class="grid grid-cols-7 gap-2">
+            <template x-for="i in 31">
                 <button 
-                    @click="message = message === 'Hello World' ? 'Alpine.js が動作しています！' : 'Hello World'"
-                    class="bg-blue-500 hover:bg-blue-600 text-white font-semibold py-2 px-4 rounded transition duration-200"
-                >
-                    クリックしてください
+                    @click="alert(i + '日の予約画面へ進みます（実装中）')"
+                    class="h-12 border rounded-lg flex items-center justify-center hover:bg-blue-50 transition active:bg-blue-200">
+                    <span x-text="i"></span>
                 </button>
-            </div>
-            <div class="mt-6 pt-6 border-t border-gray-200">
-                <p class="text-sm text-gray-500 text-center">
-                    FastAPI + Alpine.js + Tailwind CSS
-                </p>
-            </div>
+            </template>
+        </div>
+
+        <div class="mt-8">
+            <button class="w-full bg-blue-600 text-white font-bold py-3 rounded-lg hover:bg-blue-700 transition">
+                新規予約を登録する
+            </button>
         </div>
     </div>
 </body>
