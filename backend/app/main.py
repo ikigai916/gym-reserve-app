@@ -4,6 +4,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
 from google.cloud import firestore
+from datetime import datetime
 import os
 
 app = FastAPI()
@@ -34,9 +35,93 @@ class Reservation(BaseModel):
     user_name: str
     date: str  # 例: "2024-12-25"
 
+# ユーザーデータの型定義
+class UserCreate(BaseModel):
+    name: str
+    email: str = ""
+    phone: str = ""
+
+class UserResponse(BaseModel):
+    id: str
+    name: str
+    email: str
+    phone: str
+    createdAt: str
+    updatedAt: str
+
 @app.get("/health")
 def health_check():
     return {"status": "ok", "service": "gym-reservation-api"}
+
+# ユーザー作成API
+@app.post("/api/users", response_model=UserResponse)
+async def create_user(user: UserCreate):
+    """ユーザーを作成"""
+    try:
+        if not user.name or not user.name.strip():
+            raise HTTPException(status_code=400, detail="名前は必須です")
+        
+        # Firestoreにユーザーを保存
+        users_collection = db.collection("users")
+        
+        # メールアドレスがある場合、重複チェック
+        if user.email:
+            existing_users = users_collection.where("email", "==", user.email).stream()
+            if any(existing_users):
+                raise HTTPException(status_code=409, detail="このメールアドレスは既に登録されています")
+        
+        # 新しいユーザードキュメントを作成
+        now = datetime.now().isoformat()
+        
+        user_data = {
+            "name": user.name.strip(),
+            "email": user.email.strip() if user.email else "",
+            "phone": user.phone.strip() if user.phone else "",
+            "createdAt": now,
+            "updatedAt": now
+        }
+        
+        doc_ref = users_collection.document()
+        doc_ref.set(user_data)
+        
+        # レスポンスを返す
+        return UserResponse(
+            id=doc_ref.id,
+            name=user_data["name"],
+            email=user_data["email"],
+            phone=user_data["phone"],
+            createdAt=user_data["createdAt"],
+            updatedAt=user_data["updatedAt"]
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+# ユーザー取得API
+@app.get("/api/users/{user_id}", response_model=UserResponse)
+async def get_user(user_id: str):
+    """ユーザー情報を取得"""
+    try:
+        doc_ref = db.collection("users").document(user_id)
+        doc = doc_ref.get()
+        
+        if not doc.exists:
+            raise HTTPException(status_code=404, detail="ユーザーが見つかりません")
+        
+        user_data = doc.to_dict()
+        return UserResponse(
+            id=doc.id,
+            name=user_data["name"],
+            email=user_data.get("email", ""),
+            phone=user_data.get("phone", ""),
+            createdAt=user_data.get("createdAt", ""),
+            updatedAt=user_data.get("updatedAt", "")
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 # 予約を保存するAPI
 @app.post("/reservations")
