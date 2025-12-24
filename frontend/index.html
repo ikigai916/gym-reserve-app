@@ -32,7 +32,7 @@
         <div class="grid grid-cols-7 gap-2">
             <template x-for="i in 31">
                 <button 
-                    @click="alert(i + '日の予約画面へ進みます（実装中）')"
+                    @click="handleDateClick(i)"
                     class="h-12 border rounded-lg flex items-center justify-center hover:bg-blue-50 transition active:bg-blue-200">
                     <span x-text="i"></span>
                 </button>
@@ -93,6 +93,47 @@
                     if (confirm('ログアウトしますか？')) {
                         removeUserId();
                         window.location.href = '/login.html';
+                    }
+                },
+                
+                async handleDateClick(day) {
+                    // prompt()で名前を入力
+                    const name = prompt(`${day}日を予約します。お名前を入力してください：`, this.userName || '');
+                    
+                    if (!name || !name.trim()) {
+                        return; // キャンセルまたは空欄の場合は何もしない
+                    }
+                    
+                    // 日付を YYYY-MM-DD 形式で作成（今月の日付として）
+                    const today = new Date();
+                    const year = today.getFullYear();
+                    const month = String(today.getMonth() + 1).padStart(2, '0');
+                    const date = `${year}-${month}-${String(day).padStart(2, '0')}`;
+                    
+                    try {
+                        // POST /reservations を叩いて予約を保存
+                        const response = await fetch('/reservations', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                            },
+                            body: JSON.stringify({
+                                user_name: name.trim(),
+                                date: date
+                            })
+                        });
+                        
+                        const data = await response.json();
+                        
+                        if (response.ok) {
+                            alert(`${day}日の予約が完了しました！`);
+                            // 必要に応じて予約一覧を再読み込み
+                        } else {
+                            alert('予約に失敗しました: ' + (data.detail || 'エラーが発生しました'));
+                        }
+                    } catch (err) {
+                        alert('予約に失敗しました: ' + err.message);
+                        console.error(err);
                     }
                 }
             };
