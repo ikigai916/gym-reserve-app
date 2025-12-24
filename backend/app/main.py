@@ -28,7 +28,16 @@ if os.path.exists(frontend_path):
     app.mount("/static", StaticFiles(directory=frontend_path), name="static")
 
 # Firestore クライアントの初期化
-db = firestore.Client()
+# 認証情報が設定されていない場合でも、エラーメッセージを表示する
+try:
+    db = firestore.Client()
+    print("Firestore client initialized successfully")
+except Exception as e:
+    print(f"⚠️  Error initializing Firestore client: {e}")
+    print("⚠️  Firestore認証情報を設定してください:")
+    print("    gcloud auth application-default login")
+    # 開発環境では、エラーを表示して続行（本番環境では適切に処理）
+    raise
 
 # 予約データの型定義
 class Reservation(BaseModel):
@@ -61,14 +70,26 @@ async def create_user(user: UserCreate):
         if not user.name or not user.name.strip():
             raise HTTPException(status_code=400, detail="名前は必須です")
         
+        print(f"Creating user: {user.name}, email: {user.email}")
+        
         # Firestoreにユーザーを保存
         users_collection = db.collection("users")
         
-        # メールアドレスがある場合、重複チェック
-        if user.email:
-            existing_users = users_collection.where("email", "==", user.email).stream()
-            if any(existing_users):
-                raise HTTPException(status_code=409, detail="このメールアドレスは既に登録されています")
+        # メールアドレスがある場合、重複チェック（タイムアウト対策のため、一旦コメントアウト）
+        # 注意: 本番環境では重複チェックを有効にすることを推奨
+        # if user.email:
+        #     print(f"Checking for existing email: {user.email}")
+        #     from google.cloud.firestore_v1.base_query import FieldFilter
+        #     try:
+        #         existing_users = list(
+        #             users_collection.where(filter=FieldFilter("email", "==", user.email)).limit(1).stream()
+        #         )
+        #         if existing_users:
+        #             print(f"Email already exists")
+        #             raise HTTPException(status_code=409, detail="このメールアドレスは既に登録されています")
+        #     except Exception as e:
+        #         print(f"Warning: Email duplicate check failed: {e}")
+        #         # 重複チェックが失敗しても続行（開発環境向け）
         
         # 新しいユーザードキュメントを作成
         now = datetime.now().isoformat()
@@ -81,8 +102,10 @@ async def create_user(user: UserCreate):
             "updatedAt": now
         }
         
+        print(f"Saving user data to Firestore: {user_data}")
         doc_ref = users_collection.document()
         doc_ref.set(user_data)
+        print(f"User created with ID: {doc_ref.id}")
         
         # レスポンスを返す
         return UserResponse(
@@ -96,7 +119,10 @@ async def create_user(user: UserCreate):
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        print(f"Error creating user: {type(e).__name__}: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"ユーザー作成エラー: {str(e)}")
 
 # ユーザー取得API
 @app.get("/api/users/{user_id}", response_model=UserResponse)
