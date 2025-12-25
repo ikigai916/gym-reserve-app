@@ -40,10 +40,27 @@ jobs:
           docker push "${{ env.GAR_LOCATION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPOSITORY }}/${{ env.SERVICE_NAME }}:${{ github.sha }}"
 
       - name: 'Deploy to Cloud Run'
+        id: deploy
         run: |-
-          gcloud run deploy ${{ env.SERVICE_NAME }} \
+          SERVICE_URL=$(gcloud run deploy ${{ env.SERVICE_NAME }} \
             --image "${{ env.GAR_LOCATION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPOSITORY }}/${{ env.SERVICE_NAME }}:${{ github.sha }}" \
             --region ${{ env.REGION }} \
             --platform managed \
             --allow-unauthenticated \
-            --project ${{ env.PROJECT_ID }}
+            --project ${{ env.PROJECT_ID }} \
+            --format="value(status.url)")
+          echo "service_url=$SERVICE_URL" >> $GITHUB_OUTPUT
+          echo "Deployed to: $SERVICE_URL"
+      
+      - name: 'Set CORS environment variable'
+        run: |-
+          SERVICE_URL="${{ steps.deploy.outputs.service_url }}"
+          if [ -n "$SERVICE_URL" ]; then
+            echo "Setting ALLOWED_ORIGINS to: $SERVICE_URL"
+            gcloud run services update ${{ env.SERVICE_NAME }} \
+              --region ${{ env.REGION }} \
+              --set-env-vars ALLOWED_ORIGINS="$SERVICE_URL" \
+              --project ${{ env.PROJECT_ID }}
+          else
+            echo "Warning: SERVICE_URL is empty, skipping CORS configuration"
+          fi
