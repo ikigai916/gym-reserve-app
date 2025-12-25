@@ -10,12 +10,20 @@ import os
 app = FastAPI()
 
 # CORS設定（フロントエンドからのアクセスを許可）
+# 環境変数から許可するオリジンを取得（本番環境では適切なオリジンを設定）
+# 開発環境のデフォルト値: localhost:8000, localhost:3000
+allowed_origins_str = os.getenv(
+    "ALLOWED_ORIGINS",
+    "http://localhost:8000,http://localhost:3000,http://127.0.0.1:8000,http://127.0.0.1:3000"
+)
+allowed_origins = [origin.strip() for origin in allowed_origins_str.split(",")]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # 本番環境では適切なオリジンを指定してください
+    allow_origins=allowed_origins,  # 許可されたオリジンのみ
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allow_headers=["Content-Type", "Authorization"],
 )
 
 # フロントエンドの静的ファイルを配信
