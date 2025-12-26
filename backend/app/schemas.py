@@ -11,6 +11,13 @@ class UserCreate(BaseModel):
     phone: Optional[str] = ""
     role: Optional[Literal["trainer", "trainee"]] = "trainee"  # デフォルトはtrainee
 
+class UserUpdate(BaseModel):
+    """ユーザー更新スキーマ"""
+    name: Optional[str] = None
+    email: Optional[str] = None
+    phone: Optional[str] = None
+    # roleは更新しない（セキュリティ上の理由）
+
 class UserResponse(BaseModel):
     """ユーザー応答スキーマ"""
     id: str

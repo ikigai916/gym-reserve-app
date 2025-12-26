@@ -9,7 +9,7 @@ from typing import Optional
 import os
 
 # ユーザーデータの型定義（schemas.pyからインポート）
-from app.schemas import UserCreate, UserResponse, ReservationCreate, ReservationResponse
+from app.schemas import UserCreate, UserUpdate, UserResponse, ReservationCreate, ReservationResponse
 
 app = FastAPI()
 
@@ -162,6 +162,81 @@ async def get_user(user_id: str):
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+# ユーザー更新API
+@app.put("/api/users/{user_id}", response_model=UserResponse)
+async def update_user(user_id: str, user_update: UserUpdate):
+    """ユーザー情報を更新"""
+    try:
+        doc_ref = db.collection("users").document(user_id)
+        doc = doc_ref.get()
+        
+        if not doc.exists:
+            raise HTTPException(status_code=404, detail="ユーザーが見つかりません")
+        
+        user_data = doc.to_dict()
+        
+        # メールアドレスの重複チェック（他のユーザーとの）
+        if user_update.email and user_update.email.strip():
+            from google.cloud.firestore_v1.base_query import FieldFilter
+            try:
+                users_collection = db.collection("users")
+                existing_users = list(
+                    users_collection.where(filter=FieldFilter("email", "==", user_update.email.strip())).limit(1).stream()
+                )
+                # 自分自身以外のユーザーが同じメールアドレスを持っているかチェック
+                if existing_users and existing_users[0].id != user_id:
+                    raise HTTPException(status_code=409, detail="このメールアドレスは既に使用されています")
+            except HTTPException:
+                raise
+            except Exception as e:
+                # 重複チェックが失敗しても続行（開発環境向け）
+                print(f"Warning: Email duplicate check failed: {e}")
+        
+        # 更新データを準備
+        update_data = {}
+        if user_update.name is not None:
+            if not user_update.name.strip():
+                raise HTTPException(status_code=400, detail="名前は空にできません")
+            update_data["name"] = user_update.name.strip()
+        
+        if user_update.email is not None:
+            update_data["email"] = user_update.email.strip() if user_update.email.strip() else ""
+        
+        if user_update.phone is not None:
+            update_data["phone"] = user_update.phone.strip() if user_update.phone.strip() else ""
+        
+        # updatedAtを自動更新
+        update_data["updatedAt"] = datetime.now().isoformat()
+        
+        # Firestoreを更新
+        doc_ref.update(update_data)
+        
+        # 更新後のデータを取得
+        updated_doc = doc_ref.get()
+        updated_data = updated_doc.to_dict()
+        
+        # 既存データとの互換性: roleフィールドがない場合はデフォルトでtrainee
+        role = updated_data.get("role", "trainee")
+        
+        return UserResponse(
+            id=updated_doc.id,
+            name=updated_data["name"],
+            email=updated_data.get("email", ""),
+            phone=updated_data.get("phone", ""),
+            role=role,
+            createdAt=updated_data.get("createdAt", ""),
+            updatedAt=updated_data.get("updatedAt", "")
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        error_type = type(e).__name__
+        error_message = str(e)
+        print(f"Error updating user: {error_type}: {error_message}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"ユーザー更新エラー ({error_type}): {error_message}")
 
 # 予約を保存するAPI（新形式）
 @app.post("/api/reservations", response_model=ReservationResponse)

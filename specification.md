@@ -106,6 +106,7 @@
 #### 5.3.1 ユーザー関連
 - `POST /api/users`: ユーザー作成（name, email, phone, role）
 - `GET /api/users/{user_id}`: ユーザー情報取得
+- `PUT /api/users/{user_id}`: ユーザー情報更新（name, email, phone）
 
 #### 5.3.2 予約関連
 - `POST /api/reservations`: 予約作成（新形式、userId, date, timeSlot, trainerId, menuId, userPlanId）
