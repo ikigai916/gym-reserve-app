@@ -68,6 +68,42 @@
                     >
                 </div>
 
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">
+                        ロール <span class="text-red-500">*</span>
+                    </label>
+                    <div class="space-y-2">
+                        <label class="flex items-center p-3 border border-gray-300 rounded-lg cursor-pointer hover:bg-gray-50 transition"
+                               :class="role === 'trainee' ? 'bg-blue-50 border-blue-500' : ''">
+                            <input 
+                                type="radio" 
+                                x-model="role"
+                                value="trainee"
+                                class="mr-3"
+                                :disabled="loading"
+                            >
+                            <div>
+                                <div class="font-medium text-gray-800">トレーニー（顧客）</div>
+                                <div class="text-xs text-gray-500">サービスを利用します</div>
+                            </div>
+                        </label>
+                        <label class="flex items-center p-3 border border-gray-300 rounded-lg cursor-pointer hover:bg-gray-50 transition"
+                               :class="role === 'trainer' ? 'bg-blue-50 border-blue-500' : ''">
+                            <input 
+                                type="radio" 
+                                x-model="role"
+                                value="trainer"
+                                class="mr-3"
+                                :disabled="loading"
+                            >
+                            <div>
+                                <div class="font-medium text-gray-800">トレーナー（サービス提供者）</div>
+                                <div class="text-xs text-gray-500">予約管理やカルテ記録を行います</div>
+                            </div>
+                        </label>
+                    </div>
+                </div>
+
                 <button 
                     type="submit"
                     :disabled="loading || !name.trim()"
@@ -105,6 +141,7 @@
                 name: '',
                 email: '',
                 phone: '',
+                role: 'trainee',  // デフォルトはtrainee
                 error: '',
                 success: '',
                 loading: false,
@@ -130,6 +167,7 @@
                                 name: this.name.trim(),
                                 email: this.email.trim(),
                                 phone: this.phone.trim(),
+                                role: this.role,
                             }),
                         });
 

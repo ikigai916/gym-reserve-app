@@ -7,6 +7,9 @@ from google.cloud import firestore
 from datetime import datetime
 import os
 
+# ユーザーデータの型定義（schemas.pyからインポート）
+from app.schemas import UserCreate, UserResponse
+
 app = FastAPI()
 
 # CORS設定（フロントエンドからのアクセスを許可）
@@ -52,20 +55,6 @@ class Reservation(BaseModel):
     user_name: str
     date: str  # 例: "2024-12-25"
 
-# ユーザーデータの型定義
-class UserCreate(BaseModel):
-    name: str
-    email: str = ""
-    phone: str = ""
-
-class UserResponse(BaseModel):
-    id: str
-    name: str
-    email: str
-    phone: str
-    createdAt: str
-    updatedAt: str
-
 @app.get("/health")
 def health_check():
     return {"status": "ok", "service": "gym-reservation-api"}
@@ -102,10 +91,14 @@ async def create_user(user: UserCreate):
         # 新しいユーザードキュメントを作成
         now = datetime.now().isoformat()
         
+        # ロールが指定されていない場合はデフォルトでtrainee
+        role = user.role if user.role else "trainee"
+        
         user_data = {
             "name": user.name.strip(),
             "email": user.email.strip() if user.email else "",
             "phone": user.phone.strip() if user.phone else "",
+            "role": role,
             "createdAt": now,
             "updatedAt": now
         }
@@ -121,6 +114,7 @@ async def create_user(user: UserCreate):
             name=user_data["name"],
             email=user_data["email"],
             phone=user_data["phone"],
+            role=user_data["role"],
             createdAt=user_data["createdAt"],
             updatedAt=user_data["updatedAt"]
         )
@@ -152,11 +146,14 @@ async def get_user(user_id: str):
             raise HTTPException(status_code=404, detail="ユーザーが見つかりません")
         
         user_data = doc.to_dict()
+        # 既存データとの互換性: roleフィールドがない場合はデフォルトでtrainee
+        role = user_data.get("role", "trainee")
         return UserResponse(
             id=doc.id,
             name=user_data["name"],
             email=user_data.get("email", ""),
             phone=user_data.get("phone", ""),
+            role=role,
             createdAt=user_data.get("createdAt", ""),
             updatedAt=user_data.get("updatedAt", "")
         )
