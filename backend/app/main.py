@@ -127,10 +127,18 @@ async def create_user(user: UserCreate):
     except HTTPException:
         raise
     except Exception as e:
-        print(f"Error creating user: {type(e).__name__}: {str(e)}")
+        error_type = type(e).__name__
+        error_message = str(e)
+        print(f"Error creating user: {error_type}: {error_message}")
         import traceback
         traceback.print_exc()
-        raise HTTPException(status_code=500, detail=f"ユーザー作成エラー: {str(e)}")
+        # 権限エラーの場合、より分かりやすいメッセージを返す
+        if "Permission denied" in error_message or "permission" in error_message.lower():
+            raise HTTPException(
+                status_code=500, 
+                detail=f"Firestoreへのアクセス権限がありません。Cloud Runのサービスアカウントに'Cloud Datastore User'ロールが必要です。エラー: {error_message}"
+            )
+        raise HTTPException(status_code=500, detail=f"ユーザー作成エラー ({error_type}): {error_message}")
 
 # ユーザー取得API
 @app.get("/api/users/{user_id}", response_model=UserResponse)
