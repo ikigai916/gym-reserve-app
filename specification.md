@@ -36,12 +36,16 @@
 
 ### 3.1 予約 (Reservation)
 - `id`: 予約ID（主キー）
-- `userId`: ユーザーID（外部キー、User.idを参照）
-- `name`: 予約者名（表示用、ユーザー情報から取得）
-- `date`: 予約日（YYYY-MM-DD形式）
-- `timeSlot`: 時間枠（例: "09:00-10:00"）
+- `userId`: ユーザーID（外部キー、User.idを参照、必須）
+- `user_name`: 予約者名（表示用、ユーザー情報から取得）
+- `date`: 予約日（YYYY-MM-DD形式、必須）
+- `timeSlot`: 時間枠（例: "09:00-10:00"、必須）
+- `status`: ステータス（"active" または "cancelled"、デフォルトは "active"）
+- `trainerId`: トレーナーID（外部キー、User.idを参照、Optional、将来必須化予定）
+- `menuId`: メニューID（外部キー、Menu.idを参照、Optional、将来必須化予定）
+- `userPlanId`: ユーザープランID（外部キー、UserPlan.idを参照、Optional、将来必須化予定）
 - `createdAt`: 作成日時
-- `status`: ステータス（active/cancelled）
+- `updatedAt`: 更新日時
 
 ### 3.2 時間枠設定
 - デフォルトの時間枠（例: 09:00-10:00, 10:00-11:00, ...）
@@ -52,10 +56,12 @@
 - `name`: ユーザー名
 - `email`: メールアドレス
 - `phone`: 電話番号
+- `role`: ロール（"trainer" または "trainee"、デフォルトは "trainee"）
 - `createdAt`: 作成日時
 - `updatedAt`: 更新日時
 - 注：ユーザーIDでユーザーを一意に識別（複数人での同時使用を可能にする）
 - 注：初回予約時にユーザー情報を作成、またはマイページで新規登録
+- 注：ロールにより、トレーナー（サービス提供者）とトレーニー（顧客）を区別
 
 ## 4. UI要件
 
@@ -86,17 +92,37 @@
 ## 5. 技術要件
 
 ### 5.1 フロントエンド
-- モダンなWeb技術（React/Vue等を想定）
+- HTML + Alpine.js + Tailwind CSS（CDN）
 - レスポンシブデザイン
+- ローカルストレージでユーザーIDを管理
 
 ### 5.2 バックエンド
+- FastAPI（Python）
 - RESTful API
-- データ永続化（データベースまたはファイル）
+- Firestore（NoSQLデータベース）でデータ永続化
 
-### 5.3 その他
+### 5.3 APIエンドポイント
+
+#### 5.3.1 ユーザー関連
+- `POST /api/users`: ユーザー作成（name, email, phone, role）
+- `GET /api/users/{user_id}`: ユーザー情報取得
+
+#### 5.3.2 予約関連
+- `POST /api/reservations`: 予約作成（新形式、userId, date, timeSlot, trainerId, menuId, userPlanId）
+- `GET /api/reservations`: 予約一覧取得（新形式、フィルタリング対応予定）
+- `POST /reservations`: 予約作成（旧形式、後方互換性のため残す）
+- `GET /reservations`: 予約一覧取得（旧形式、後方互換性のため残す）
+
+#### 5.3.3 その他
+- `GET /health`: ヘルスチェック
+
+詳細は `API_DOCUMENTATION.md` を参照してください。
+
+### 5.4 その他
 - シンプルな実装を優先
 - 認証は簡易的（ユーザーIDベースで管理、ローカルストレージで識別）
 - 複数人での同時使用に対応（ユーザーIDによる一意の識別）
+- ロールベースアクセス制御（トレーナー/トレーニー）
 
 ## 6. 制約事項
 
