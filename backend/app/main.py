@@ -1,14 +1,15 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
 from google.cloud import firestore
 from datetime import datetime
+from typing import Optional
 import os
 
 # ユーザーデータの型定義（schemas.pyからインポート）
-from app.schemas import UserCreate, UserResponse
+from app.schemas import UserCreate, UserResponse, ReservationCreate, ReservationResponse
 
 app = FastAPI()
 
@@ -50,7 +51,7 @@ except Exception as e:
     # 開発環境では、エラーを表示して続行（本番環境では適切に処理）
     raise
 
-# 予約データの型定義
+# 予約データの型定義（後方互換性のため残すが、ReservationCreate/Responseを使用推奨）
 class Reservation(BaseModel):
     user_name: str
     date: str  # 例: "2024-12-25"
@@ -162,9 +163,63 @@ async def get_user(user_id: str):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-# 予約を保存するAPI
+# 予約を保存するAPI（新形式）
+@app.post("/api/reservations", response_model=ReservationResponse)
+async def create_reservation(res: ReservationCreate):
+    """予約を作成"""
+    try:
+        # バリデーション
+        if not res.userId or not res.date or not res.timeSlot:
+            raise HTTPException(status_code=400, detail="userId、date、timeSlotは必須です")
+        
+        # ユーザー情報を取得（user_name用）
+        user_doc = db.collection("users").document(res.userId).get()
+        if not user_doc.exists:
+            raise HTTPException(status_code=404, detail="ユーザーが見つかりません")
+        user_data = user_doc.to_dict()
+        user_name = user_data.get("name", "")
+        
+        # 予約データを準備
+        now = datetime.now().isoformat()
+        reservation_data = {
+            "userId": res.userId,
+            "user_name": user_name,
+            "date": res.date,
+            "timeSlot": res.timeSlot,
+            "status": "active",
+            "trainerId": res.trainerId,
+            "menuId": res.menuId,
+            "userPlanId": res.userPlanId,
+            "createdAt": now,
+            "updatedAt": now
+        }
+        
+        # Firestoreに保存
+        doc_ref = db.collection("reservations").document()
+        doc_ref.set(reservation_data)
+        
+        return ReservationResponse(
+            id=doc_ref.id,
+            userId=reservation_data["userId"],
+            user_name=reservation_data["user_name"],
+            date=reservation_data["date"],
+            timeSlot=reservation_data["timeSlot"],
+            status=reservation_data["status"],
+            trainerId=reservation_data.get("trainerId"),
+            menuId=reservation_data.get("menuId"),
+            userPlanId=reservation_data.get("userPlanId"),
+            createdAt=reservation_data["createdAt"],
+            updatedAt=reservation_data["updatedAt"]
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"予約作成エラー: {str(e)}")
+
+# 予約を保存するAPI（旧形式・後方互換性のため残す）
 @app.post("/reservations")
-async def create_reservation(res: Reservation):
+async def create_reservation_legacy(res: Reservation):
+    """予約を作成（旧形式・後方互換性のため）"""
     try:
         # 'reservations' というコレクションに保存
         doc_ref = db.collection("reservations").document()
@@ -177,9 +232,45 @@ async def create_reservation(res: Reservation):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-# 予約一覧を取得するAPI（カレンダー表示用）
+# 予約一覧を取得するAPI（新形式）
+@app.get("/api/reservations", response_model=list[ReservationResponse])
+async def get_reservations(userId: Optional[str] = None, status: Optional[str] = None):
+    """予約一覧を取得（フィルタリング対応）"""
+    try:
+        reservations_ref = db.collection("reservations")
+        
+        # フィルタリング（将来実装予定）
+        # if userId:
+        #     reservations_ref = reservations_ref.where("userId", "==", userId)
+        # if status:
+        #     reservations_ref = reservations_ref.where("status", "==", status)
+        
+        docs = reservations_ref.stream()
+        reservations = []
+        for doc in docs:
+            data = doc.to_dict()
+            # 既存データとの互換性: 新フィールドがない場合はデフォルト値を設定
+            reservations.append(ReservationResponse(
+                id=doc.id,
+                userId=data.get("userId", ""),
+                user_name=data.get("user_name", data.get("name", "")),  # 旧形式との互換性
+                date=data.get("date", ""),
+                timeSlot=data.get("timeSlot", ""),
+                status=data.get("status", "active"),
+                trainerId=data.get("trainerId"),
+                menuId=data.get("menuId"),
+                userPlanId=data.get("userPlanId"),
+                createdAt=data.get("createdAt", ""),
+                updatedAt=data.get("updatedAt", data.get("createdAt", ""))
+            ))
+        return reservations
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"予約取得エラー: {str(e)}")
+
+# 予約一覧を取得するAPI（旧形式・後方互換性のため残す）
 @app.get("/reservations")
-async def get_reservations():
+async def get_reservations_legacy():
+    """予約一覧を取得（旧形式・後方互換性のため）"""
     docs = db.collection("reservations").stream()
     return [{"id": doc.id, **doc.to_dict()} for doc in docs]
 
