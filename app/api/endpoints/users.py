@@ -112,3 +112,4 @@ async def update_user(user_id: str, user_update: UserUpdate):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"ユーザー更新エラー: {str(e)}")
 
+

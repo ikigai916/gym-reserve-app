@@ -3,200 +3,120 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ログイン - ジム予約システム</title>
+    <title>ログイン - Zen Conditioning / Kukan</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script defer src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@300;400;500;700&display=swap');
+        body { font-family: 'Noto+Sans+JP', sans-serif; }
+    </style>
 </head>
-<body class="bg-gray-100 min-h-screen flex items-center justify-center p-4">
+<body class="bg-stone-50 text-stone-900 min-h-screen flex items-center justify-center p-4">
     <div x-data="loginApp()" class="w-full max-w-md">
-        <div class="bg-white rounded-xl shadow-lg p-8">
-            <h1 class="text-3xl font-bold text-gray-800 text-center mb-2">🏋️ ジム予約システム</h1>
-            <p class="text-sm text-gray-600 text-center mb-6">ログインまたは新規登録</p>
+        <div class="bg-white rounded-2xl shadow-sm border border-stone-200 p-8">
+            <h1 class="text-2xl font-light text-stone-800 text-center mb-1">Zen Conditioning</h1>
+            <h2 class="text-xl font-medium text-stone-800 text-center mb-6">Kukan</h2>
 
-            <!-- エラーメッセージ -->
-            <div x-show="error" 
-                 x-text="error"
-                 class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4 text-sm"></div>
+            <!-- タブ切り替え -->
+            <div class="flex border-b border-stone-100 mb-6">
+                <button @click="mode = 'login'" 
+                        :class="mode === 'login' ? 'border-stone-800 text-stone-800' : 'border-transparent text-stone-400'"
+                        class="flex-1 pb-2 text-sm font-medium border-b-2 transition">ログイン</button>
+                <button @click="mode = 'signup'" 
+                        :class="mode === 'signup' ? 'border-stone-800 text-stone-800' : 'border-transparent text-stone-400'"
+                        class="flex-1 pb-2 text-sm font-medium border-b-2 transition">新規登録</button>
+            </div>
 
-            <!-- 成功メッセージ -->
-            <div x-show="success" 
-                 x-text="success"
-                 class="bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded mb-4 text-sm"></div>
+            <!-- メッセージ -->
+            <div x-show="error" x-text="error" class="bg-red-50 text-red-600 px-4 py-3 rounded-lg mb-4 text-xs"></div>
+            <div x-show="success" x-text="success" class="bg-stone-50 text-stone-600 px-4 py-3 rounded-lg mb-4 text-xs"></div>
 
-            <!-- ログインフォーム -->
-            <form @submit.prevent="handleLogin" class="space-y-4">
-                <div>
-                    <label for="name" class="block text-sm font-medium text-gray-700 mb-1">
-                        お名前 <span class="text-red-500">*</span>
-                    </label>
-                    <input 
-                        id="name"
-                        type="text" 
-                        x-model="name"
-                        required
-                        class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                        placeholder="例: 山田太郎"
-                        :disabled="loading"
-                    >
-                </div>
-
-                <div>
-                    <label for="email" class="block text-sm font-medium text-gray-700 mb-1">
-                        メールアドレス <span class="text-gray-400">(任意)</span>
-                    </label>
-                    <input 
-                        id="email"
-                        type="email" 
-                        x-model="email"
-                        class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                        placeholder="例: yamada@example.com"
-                        :disabled="loading"
-                    >
-                </div>
-
-                <div>
-                    <label for="phone" class="block text-sm font-medium text-gray-700 mb-1">
-                        電話番号 <span class="text-gray-400">(任意)</span>
-                    </label>
-                    <input 
-                        id="phone"
-                        type="tel" 
-                        x-model="phone"
-                        class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                        placeholder="例: 090-1234-5678"
-                        :disabled="loading"
-                    >
-                </div>
-
-                <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-2">
-                        ロール <span class="text-red-500">*</span>
-                    </label>
-                    <div class="space-y-2">
-                        <label class="flex items-center p-3 border border-gray-300 rounded-lg cursor-pointer hover:bg-gray-50 transition"
-                               :class="role === 'trainee' ? 'bg-blue-50 border-blue-500' : ''">
-                            <input 
-                                type="radio" 
-                                x-model="role"
-                                value="trainee"
-                                class="mr-3"
-                                :disabled="loading"
-                            >
-                            <div>
-                                <div class="font-medium text-gray-800">トレーニー（顧客）</div>
-                                <div class="text-xs text-gray-500">サービスを利用します</div>
-                            </div>
-                        </label>
-                        <label class="flex items-center p-3 border border-gray-300 rounded-lg cursor-pointer hover:bg-gray-50 transition"
-                               :class="role === 'trainer' ? 'bg-blue-50 border-blue-500' : ''">
-                            <input 
-                                type="radio" 
-                                x-model="role"
-                                value="trainer"
-                                class="mr-3"
-                                :disabled="loading"
-                            >
-                            <div>
-                                <div class="font-medium text-gray-800">トレーナー（サービス提供者）</div>
-                                <div class="text-xs text-gray-500">予約管理やカルテ記録を行います</div>
-                            </div>
-                        </label>
+            <form @submit.prevent="handleSubmit" class="space-y-4">
+                <template x-if="mode === 'signup'">
+                    <div>
+                        <label class="block text-xs font-medium text-stone-500 mb-1">お名前</label>
+                        <input type="text" x-model="name" required class="w-full px-4 py-2 bg-stone-50 border border-stone-200 rounded-lg focus:outline-none focus:border-stone-500 text-sm text-stone-900">
                     </div>
+                </template>
+
+                <div>
+                    <label class="block text-xs font-medium text-stone-500 mb-1">メールアドレス</label>
+                    <input type="email" x-model="email" required class="w-full px-4 py-2 bg-stone-50 border border-stone-200 rounded-lg focus:outline-none focus:border-stone-500 text-sm text-stone-900">
                 </div>
 
-                <button 
-                    type="submit"
-                    :disabled="loading || !name.trim()"
-                    class="w-full bg-blue-600 text-white font-bold py-3 rounded-lg hover:bg-blue-700 transition disabled:bg-gray-400 disabled:cursor-not-allowed"
-                >
-                    <span x-show="!loading">ログイン / 新規登録</span>
+                <div>
+                    <label class="block text-xs font-medium text-stone-500 mb-1">パスワード</label>
+                    <input type="password" x-model="password" required class="w-full px-4 py-2 bg-stone-50 border border-stone-200 rounded-lg focus:outline-none focus:border-stone-500 text-sm text-stone-900">
+                </div>
+
+                <template x-if="mode === 'signup'">
+                    <div class="pt-2">
+                        <label class="block text-xs font-medium text-stone-500 mb-2">役割</label>
+                        <div class="flex gap-4">
+                            <label class="flex items-center text-sm text-stone-600 cursor-pointer">
+                                <input type="radio" x-model="role" value="trainee" class="mr-2 accent-stone-800"> 一般
+                            </label>
+                            <label class="flex items-center text-sm text-stone-600 cursor-pointer">
+                                <input type="radio" x-model="role" value="trainer" class="mr-2 accent-stone-800"> トレーナー
+                            </label>
+                        </div>
+                    </div>
+                </template>
+
+                <button type="submit" 
+                        :disabled="loading"
+                        class="w-full bg-stone-800 text-white py-3 rounded-lg text-sm font-medium hover:bg-stone-700 transition disabled:bg-stone-300 mt-4">
+                    <span x-show="!loading" x-text="mode === 'login' ? 'ログイン' : '登録する'"></span>
                     <span x-show="loading">処理中...</span>
                 </button>
             </form>
-
-            <p class="mt-4 text-xs text-gray-500 text-center">
-                初回の場合は新規ユーザーとして登録されます
-            </p>
         </div>
     </div>
 
     <script>
-        const USER_ID_KEY = 'gym_reservation_user_id';
-        const USER_NAME_KEY = 'gym_reservation_user_name';
-
-        function getUserId() {
-            return localStorage.getItem(USER_ID_KEY);
-        }
-
-        function setUserId(userId) {
-            localStorage.setItem(USER_ID_KEY, userId);
-        }
-
-        function setUserName(userName) {
-            localStorage.setItem(USER_NAME_KEY, userName);
-        }
-
         function loginApp() {
             return {
+                mode: 'login',
                 name: '',
                 email: '',
-                phone: '',
-                role: 'trainee',  // デフォルトはtrainee
+                password: '',
+                role: 'trainee',
                 error: '',
                 success: '',
                 loading: false,
 
-                async handleLogin() {
-                    if (!this.name.trim()) {
-                        this.error = '名前を入力してください';
-                        return;
-                    }
-
+                async handleSubmit() {
                     this.loading = true;
                     this.error = '';
                     this.success = '';
 
+                    const url = this.mode === 'login' ? '/api/auth/login' : '/api/auth/signup';
+                    const body = this.mode === 'login' 
+                        ? { email: this.email, password: this.password }
+                        : { name: this.name, email: this.email, password: this.password, role: this.role };
+
                     try {
-                        // バックエンドAPIにユーザーを作成または取得
-                        const response = await fetch('/api/users', {
+                        const response = await fetch(url, {
                             method: 'POST',
-                            headers: {
-                                'Content-Type': 'application/json',
-                            },
-                            body: JSON.stringify({
-                                name: this.name.trim(),
-                                email: this.email.trim(),
-                                phone: this.phone.trim(),
-                                role: this.role,
-                            }),
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify(body)
                         });
 
                         const data = await response.json();
 
                         if (!response.ok) {
-                            // 既存ユーザーの場合など
-                            if (response.status === 409) {
-                                this.error = data.error || 'このメールアドレスは既に登録されています';
-                            } else {
-                                this.error = data.error || 'ログインに失敗しました';
-                            }
-                            return;
+                            throw new Error(data.detail || 'エラーが発生しました');
                         }
 
-                        // ユーザーIDをローカルストレージに保存
-                        setUserId(data.id);
-                        setUserName(data.name);
-                        
-                        this.success = 'ログインしました！メイン画面に移動します...';
-                        
-                        // 少し待ってからメイン画面に遷移
-                        setTimeout(() => {
-                            window.location.href = '/index.html';
-                        }, 1000);
+                        // トークンと情報を保存
+                        localStorage.setItem('kukan_token', data.access_token);
+                        localStorage.setItem('kukan_user', JSON.stringify(data.user));
+
+                        this.success = '認証に成功しました。移動します...';
+                        setTimeout(() => window.location.href = '/', 1000);
 
                     } catch (err) {
-                        this.error = 'ログインに失敗しました: ' + err.message;
-                        console.error(err);
+                        this.error = err.message;
                     } finally {
                         this.loading = false;
                     }
@@ -204,13 +124,10 @@
             };
         }
 
-        // 既にログインしている場合はメイン画面にリダイレクト
-        window.addEventListener('DOMContentLoaded', () => {
-            if (getUserId()) {
-                window.location.href = '/index.html';
-            }
-        });
+        // すでにログインしているかチェック
+        if (localStorage.getItem('kukan_token')) {
+            window.location.href = '/';
+        }
     </script>
 </body>
 </html>
-

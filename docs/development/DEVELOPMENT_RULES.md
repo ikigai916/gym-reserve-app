@@ -10,14 +10,15 @@
 
 ### 対象ドキュメント
 
-1. **仕様書（`specification.md`）**
+1. **詳細仕様書 (`docs/strategy/SPECIFICATION.md`)**
    - 機能追加・変更時
    - データモデル変更時
    - API仕様変更時
 
 2. **その他のドキュメント**
-   - `FEATURE_LIST.md`: 機能一覧の更新
-   - `SCREEN_LIST.md`: 画面一覧の更新
+   - `docs/management/PROGRESS.md`: 機能進捗の更新
+   - `docs/management/IMPLEMENTATION_LOG.md`: 実装ログの追記（必須）
+   - `docs/management/TROUBLESHOOTING_HISTORY.md`: トラブル解決の記録
    - `README.md`: セットアップ手順の変更時
 
 ### チェックリスト
@@ -50,6 +51,7 @@ PRレビュー時に以下を確認（`/github:pull-request-review` で自動確
 
 - [ ] **ローカル環境で動作確認**
   - バックエンドサーバーを起動（`uvicorn app.main:app --reload --host 0.0.0.0 --port 8000`）
+  - または Docker を使用して確認（[DOCKER_USAGE.md](./DOCKER_USAGE.md) 参照）
   - ブラウザで該当機能をテスト
   - エラーが発生しないことを確認
 
@@ -355,8 +357,10 @@ print(f"User created: {user_data}")  # 機密情報が含まれる可能性
 
 ## 関連ドキュメント
 
+- `docs/strategy/`: 攻めのドキュメント（要件・仕様・アーキテクチャ）
+- `docs/management/`: 守りのドキュメント（進捗・ログ・トラブル・テスト・運用）
 - `DEVELOPMENT_WORKFLOW.md`: 開発フローの詳細
+- `DOCKER_USAGE.md`: Docker コマンド運用方法
 - `SECURITY_CHECKLIST.md`: セキュリティチェックリスト
-- `ISSUE_PRIORITY.md`: Issue優先度一覧
 - `CUSTOM_COMMANDS_SETUP.md`: カスタムコマンドの使い方
 
