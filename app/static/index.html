@@ -196,8 +196,8 @@
                                 <span :class="res.status === 'active' ? 'text-green-600' : 'text-stone-400'" 
                                       class="text-[10px] font-bold uppercase" x-text="res.status === 'active' ? '確定' : '取消済'"></span>
                             </div>
-                            <div class="text-sm font-medium mb-1" x-text="res.startTime + ' - ' + res.endTime"></div>
-                            <div class="text-xs text-stone-500 mb-3" x-text="res.courseMinutes + '分セッション'"></div>
+                            <div class="text-sm font-medium mb-1" x-text="(res.startTime || '??:??') + ' - ' + (res.endTime || '??:??')"></div>
+                            <div class="text-xs text-stone-500 mb-3" x-text="(res.courseMinutes || '--') + '分セッション'"></div>
                             <button x-show="res.status === 'active'" 
                                     @click="cancelReservation(res.id)" 
                                     class="text-[10px] text-stone-400 hover:text-red-500 transition underline underline-offset-4">予約をキャンセルする</button>
@@ -245,10 +245,15 @@
                 },
 
                 async loadMyReservations() {
-                    const res = await fetch('/api/reservations/', {
-                        headers: { 'Authorization': `Bearer ${this.token}` }
-                    });
-                    this.myReservations = await res.json();
+                    try {
+                        const res = await fetch('/api/reservations/', {
+                            headers: { 'Authorization': `Bearer ${this.token}` }
+                        });
+                        if (!res.ok) throw new Error('予約情報の取得に失敗しました');
+                        this.myReservations = await res.json();
+                    } catch (err) {
+                        console.error('loadMyReservations error:', err);
+                    }
                 },
 
                 async loadAvailableSlots() {
@@ -379,9 +384,9 @@
                     });
 
                     if (res.ok) {
+                        await this.loadMyReservations();
+                        await this.loadAvailableSlots();
                         alert('予約が完了しました');
-                        this.loadMyReservations();
-                        this.loadAvailableSlots();
                     } else {
                         const err = await res.json();
                         alert(err.detail);
@@ -397,9 +402,9 @@
                     });
 
                     if (res.ok) {
+                        await this.loadMyReservations();
+                        await this.loadAvailableSlots();
                         alert('キャンセルしました');
-                        this.loadMyReservations();
-                        this.loadAvailableSlots();
                     } else {
                         const err = await res.json();
                         alert(err.detail);
