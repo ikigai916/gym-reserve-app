@@ -22,9 +22,27 @@ async def create_availabilities(
         availabilities_collection = db.collection("availabilities")
         results = []
         
+        # 既存の枠を取得して重複チェック
+        start_times = [slot.startAt for slot in data.slots]
+        min_start = min(start_times)
+        max_start = max(start_times)
+        
+        existing_docs = availabilities_collection\
+            .where(filter=FieldFilter("trainerId", "==", data.trainerId))\
+            .where(filter=FieldFilter("startAt", ">=", min_start))\
+            .where(filter=FieldFilter("startAt", "<=", max_start))\
+            .stream()
+            
+        existing_starts = {doc.to_dict()["startAt"].isoformat() if isinstance(doc.to_dict()["startAt"], datetime) else doc.to_dict()["startAt"] for doc in existing_docs}
+
         # バッチ処理で登録
         batch = db.batch()
         for slot in data.slots:
+            # 重複チェック (ISO文字列で比較)
+            slot_start_iso = slot.startAt.isoformat() if isinstance(slot.startAt, datetime) else slot.startAt
+            if slot_start_iso in existing_starts:
+                continue
+
             doc_ref = availabilities_collection.document()
             slot_data = {
                 "trainerId": data.trainerId,
@@ -85,8 +103,8 @@ async def delete_availability(
         if data["isBooked"]:
             raise HTTPException(status_code=400, detail="予約済みの枠は削除できません")
             
-        doc_ref.delete()
-        return {"status": "success"}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+            doc_ref.delete()
+            return {"status": "success", "id": availability_id}
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=str(e))
 

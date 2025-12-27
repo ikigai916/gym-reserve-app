@@ -1,9 +1,29 @@
 from fastapi import APIRouter, HTTPException
 from datetime import datetime
+from typing import List
 from app.schemas.user import UserCreate, UserUpdate, UserResponse
 from app.core.database import db
 
+from google.cloud.firestore_v1.base_query import FieldFilter
+
 router = APIRouter()
+
+@router.get("/", response_model=List[UserResponse])
+async def get_users(role: str = None):
+    """ユーザー一覧を取得（ロールでフィルタリング可能）"""
+    try:
+        query = db.collection("users")
+        if role:
+            query = query.where(filter=FieldFilter("role", "==", role))
+        
+        docs = query.stream()
+        results = []
+        for doc in docs:
+            data = doc.to_dict()
+            results.append(UserResponse(id=doc.id, **data))
+        return results
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 @router.post("/", response_model=UserResponse)
 async def create_user(user: UserCreate):
