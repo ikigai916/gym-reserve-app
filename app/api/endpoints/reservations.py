@@ -95,12 +95,16 @@ async def create_reservation(
 
 @router.get("/", response_model=List[ReservationResponse])
 async def get_reservations(current_user: dict = Depends(get_current_user)):
-    """予約一覧を取得（ロールに応じてフィルタリング）"""
+    """予約一覧を取得（ロールに応じてフィルタリング）個人またはトレーナーに関連するもの"""
     try:
         query = db.collection("reservations")
         
-        # トレーナー以外は自分の予約のみ
-        if current_user.get("role") != "trainer":
+        # ロールに応じてフィルタリング
+        if current_user.get("role") == "trainer":
+            # トレーナーは自分宛の予約をすべて取得
+            query = query.where(filter=FieldFilter("trainerId", "==", current_user["id"]))
+        else:
+            # 一般会員は自分の予約のみ
             query = query.where(filter=FieldFilter("userId", "==", current_user["id"]))
             
         docs = query.order_by("createdAt", direction=firestore.Query.DESCENDING).stream()
