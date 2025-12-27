@@ -7,6 +7,7 @@ class ReservationCreate(BaseModel):
     date: str  # YYYY-MM-DD
     startTime: str  # HH:mm
     courseMinutes: int  # 60, 90, 120...
+    startAt: Optional[str] = None # ISO形式の開始日時 (UTC)
 
 class ReservationResponse(BaseModel):
     """予約応答スキーマ"""
