@@ -33,7 +33,14 @@ async def create_reservation(
         
         # 必要なスロット数を計算 (30分単位)
         num_slots = res.courseMinutes // 30
-        start_dt = datetime.fromisoformat(f"{res.date}T{res.startTime}:00")
+        
+        # 開始日時の確定 (UTC ISO形式があれば優先)
+        if res.startAt:
+            # Zを+00:00に置換してfromisoformatでパース
+            start_dt = datetime.fromisoformat(res.startAt.replace('Z', '+00:00'))
+        else:
+            # フォールバック: naive datetime (サーバーのローカル時間に依存)
+            start_dt = datetime.fromisoformat(f"{res.date}T{res.startTime}:00")
         
         # 連続スロットの開始から終了までの時間を計算
         end_dt = start_dt + timedelta(minutes=res.courseMinutes)
