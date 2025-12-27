@@ -245,7 +245,7 @@
                 },
 
                 async loadMyReservations() {
-                    const res = await fetch('/api/reservations', {
+                    const res = await fetch('/api/reservations/', {
                         headers: { 'Authorization': `Bearer ${this.token}` }
                     });
                     this.myReservations = await res.json();
@@ -254,7 +254,7 @@
                 async loadAvailableSlots() {
                     if (!this.selectedDate) return;
                     // 指定日の生スロットを取得
-                    const res = await fetch(`/api/availabilities?date=${this.selectedDate}`, {
+                    const res = await fetch(`/api/availabilities/?date=${this.selectedDate}`, {
                         headers: { 'Authorization': `Bearer ${this.token}` }
                     });
                     const rawSlots = await res.json();
@@ -266,7 +266,7 @@
 
                 async loadTrainerSlots() {
                     if (!this.availDate || this.user?.role !== 'trainer') return;
-                    const res = await fetch(`/api/availabilities?date=${this.availDate}&trainer_id=${this.user.id}`, {
+                    const res = await fetch(`/api/availabilities/?date=${this.availDate}&trainer_id=${this.user.id}`, {
                         headers: { 'Authorization': `Bearer ${this.token}` }
                     });
                     this.trainerSlots = await res.json();
@@ -339,7 +339,7 @@
                         current = slotEnd;
                     }
 
-                    const res = await fetch('/api/availabilities', {
+                    const res = await fetch('/api/availabilities/', {
                         method: 'POST',
                         headers: { 
                             'Content-Type': 'application/json',
@@ -364,7 +364,7 @@
                 async confirmReservation(slot) {
                     if (!confirm(`${this.selectedDate} ${slot.time} から ${this.selectedCourse}分 のセッションを予約しますか？\n(前日24時以降のキャンセルはできません)`)) return;
                     
-                    const res = await fetch('/api/reservations', {
+                    const res = await fetch('/api/reservations/', {
                         method: 'POST',
                         headers: { 
                             'Content-Type': 'application/json',
