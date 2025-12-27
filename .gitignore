@@ -6,4 +6,4 @@ build/
 backend/data/
 .env
 .env.local
-
+venv/
