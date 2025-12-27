@@ -47,15 +47,3 @@ async def serve_index_html():
 async def serve_login():
     return FileResponse(os.path.join(static_path, "login.html"))
 
-# 互換性のためのルート（旧 /reservations への対応など）
-@app.get("/reservations")
-async def legacy_get_reservations():
-    from app.api.endpoints.reservations import get_reservations_legacy
-    return await get_reservations_legacy()
-
-@app.post("/reservations")
-async def legacy_create_reservation(res: dict):
-    from app.api.endpoints.reservations import create_reservation_legacy
-    from app.schemas.reservation import ReservationLegacy
-    return await create_reservation_legacy(ReservationLegacy(**res))
-
