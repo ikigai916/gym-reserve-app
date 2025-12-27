@@ -121,7 +121,7 @@
         </section>
 
         <!-- 予約フロー -->
-        <section class="grid grid-cols-1 lg:grid-cols-3 gap-10">
+        <section x-show="user?.role === 'trainee'" class="grid grid-cols-1 lg:grid-cols-3 gap-10">
             <div class="lg:col-span-2 space-y-8">
                 <!-- ステップ1: コース選択 -->
                 <div>
@@ -175,9 +175,18 @@
                     <div x-show="availableSlots.length === 0" class="text-stone-400 text-sm py-4">この日の予約可能な枠はありません。</div>
                     <div class="grid grid-cols-3 sm:grid-cols-5 gap-3">
                         <template x-for="slot in availableSlots">
-                            <button @click="confirmReservation(slot)" 
-                                    class="bg-white border border-stone-200 py-3 rounded-xl text-sm hover:border-stone-800 transition">
+                            <button @click="slot.status === 'available' && confirmReservation(slot)" 
+                                    :disabled="slot.status !== 'available'"
+                                    :class="{
+                                        'bg-white border-stone-200 hover:border-stone-800 text-stone-800': slot.status === 'available',
+                                        'bg-stone-100 border-stone-100 text-stone-400 cursor-not-allowed': slot.status === 'booked',
+                                        'bg-white border-stone-100 text-stone-300 cursor-not-allowed opacity-50': slot.status === 'insufficient'
+                                    }"
+                                    class="border py-3 rounded-xl text-sm transition relative">
                                 <span x-text="slot.time"></span>
+                                <template x-if="slot.status === 'booked'">
+                                    <span class="absolute top-1 right-2 text-[8px] font-bold text-stone-400 uppercase">済</span>
+                                </template>
                             </button>
                         </template>
                     </div>
@@ -197,6 +206,7 @@
                                       class="text-[10px] font-bold uppercase" x-text="res.status === 'active' ? '確定' : '取消済'"></span>
                             </div>
                             <div class="text-sm font-medium mb-1" x-text="(res.startTime || '??:??') + ' - ' + (res.endTime || '??:??')"></div>
+                            <div class="text-[10px] text-stone-500 mb-1" x-show="user?.role === 'trainer'" x-text="'予約者: ' + (res.user_name || '不明')"></div>
                             <div class="text-xs text-stone-500 mb-3" x-text="(res.courseMinutes || '--') + '分セッション'"></div>
                             <button x-show="res.status === 'active'" 
                                     @click="cancelReservation(res.id)" 
@@ -258,15 +268,16 @@
 
                 async loadAvailableSlots() {
                     if (!this.selectedDate) return;
-                    // 指定日の生スロットを取得
-                    const res = await fetch(`/api/availabilities/?date=${this.selectedDate}`, {
-                        headers: { 'Authorization': `Bearer ${this.token}` }
-                    });
-                    const rawSlots = await res.json();
-                    
-                    // 連続スロットのロジックを簡易実装
-                    // 本来はサーバーサイドで行うが、UI表示用に計算
-                    this.availableSlots = this.calculateContinuity(rawSlots, this.selectedCourse);
+                    try {
+                        const res = await fetch(`/api/availabilities/?date=${this.selectedDate}`, {
+                            headers: { 'Authorization': `Bearer ${this.token}` }
+                        });
+                        if (!res.ok) throw new Error('空き枠の取得に失敗しました');
+                        const rawSlots = await res.json();
+                        this.availableSlots = this.calculateSlotStatuses(rawSlots, this.selectedCourse);
+                    } catch (err) {
+                        console.error('loadAvailableSlots error:', err);
+                    }
                 },
 
                 async loadTrainerSlots() {
@@ -298,33 +309,58 @@
                     }
                 },
 
-                calculateContinuity(slots, minutes) {
+                calculateSlotStatuses(allSlots, minutes) {
                     const required = minutes / 30;
-                    const freeSlots = slots.filter(s => !s.isBooked).sort((a, b) => a.startAt.localeCompare(b.startAt));
-                    const results = [];
+                    const timeMap = {};
                     
-                    for (let i = 0; i <= freeSlots.length - required; i++) {
-                        let isContinuous = true;
-                        let trainerId = freeSlots[i].trainerId;
+                    allSlots.forEach(s => {
+                        const d = new Date(s.startAt);
+                        const timeStr = d.getHours().toString().padStart(2, '0') + ':' + 
+                                        d.getMinutes().toString().padStart(2, '0');
+                        if (!timeMap[timeStr]) timeMap[timeStr] = [];
+                        timeMap[timeStr].push(s);
+                    });
+                    
+                    const uniqueTimes = Object.keys(timeMap).sort();
+                    
+                    return uniqueTimes.map(timeStr => {
+                        const slotsAtTime = timeMap[timeStr];
+                        let bestStatus = 'booked';
+                        let targetTrainerId = null;
                         
-                        for (let j = 0; j < required - 1; j++) {
-                            const current = new Date(freeSlots[i + j].startAt);
-                            const next = new Date(freeSlots[i + j + 1].startAt);
-                            // 連続性チェックと同一トレーナーチェック
-                            if ((next - current) / (1000 * 60) !== 30 || freeSlots[i + j + 1].trainerId !== trainerId) {
-                                isContinuous = false;
+                        for (const startSlot of slotsAtTime) {
+                            if (startSlot.isBooked) continue;
+                            
+                            // 少なくとも1つの枠が「空き」なら、デフォルトを insufficient に
+                            if (bestStatus === 'booked') bestStatus = 'insufficient';
+                            
+                            let isContinuous = true;
+                            for (let j = 1; j < required; j++) {
+                                const nextTime = new Date(new Date(startSlot.startAt).getTime() + j * 30 * 60000);
+                                const hasNext = allSlots.find(s => 
+                                    s.trainerId === startSlot.trainerId && 
+                                    !s.isBooked && 
+                                    new Date(s.startAt).getTime() === nextTime.getTime()
+                                );
+                                if (!hasNext) {
+                                    isContinuous = false;
+                                    break;
+                                }
+                            }
+                            
+                            if (isContinuous) {
+                                bestStatus = 'available';
+                                targetTrainerId = startSlot.trainerId;
                                 break;
                             }
                         }
-                        if (isContinuous) {
-                            const startAt = new Date(freeSlots[i].startAt);
-                            results.push({
-                                time: startAt.getHours().toString().padStart(2, '0') + ':' + startAt.getMinutes().toString().padStart(2, '0'),
-                                trainerId: trainerId
-                            });
-                        }
-                    }
-                    return results;
+                        
+                        return {
+                            time: timeStr,
+                            status: bestStatus,
+                            trainerId: targetTrainerId
+                        };
+                    });
                 },
 
                 async registerAvailability() {
