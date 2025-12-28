@@ -862,12 +862,13 @@
                     return this.myReservations
                         .filter(res => res.status === 'active')
                         .filter(res => {
-                            const start = new Date(`${res.date}T${res.startTime}:00`);
-                            return start > now;
+                            // 終了予定時刻を基準にする (終了前なら表示)
+                            const end = res.endAt ? new Date(res.endAt) : new Date(`${res.date}T${res.endTime || '23:59'}:00`);
+                            return end >= now;
                         })
                         .sort((a, b) => {
-                            const startA = new Date(`${a.date}T${a.startTime}:00`);
-                            const startB = new Date(`${b.date}T${b.startTime}:00`);
+                            const startA = new Date(a.startAt || `${a.date}T${a.startTime}:00`);
+                            const startB = new Date(b.startAt || `${b.date}T${b.startTime}:00`);
                             return startA - startB;
                         });
                 },
@@ -880,9 +881,8 @@
                 get sortedReservations() {
                     const now = new Date();
                     return [...this.myReservations].map(res => {
-                        const start = new Date(`${res.date}T${res.startTime}:00`);
-                        // endTime が HH:mm 形式なので、同じ日付の時刻としてパース
-                        const end = new Date(`${res.date}T${res.endTime}:00`);
+                        const start = res.startAt ? new Date(res.startAt) : new Date(`${res.date}T${res.startTime}:00`);
+                        const end = res.endAt ? new Date(res.endAt) : new Date(`${res.date}T${res.endTime || '23:59'}:00`);
                         
                         return {
                             ...res,
@@ -891,8 +891,8 @@
                             isUpcoming: start > now
                         };
                     }).sort((a, b) => {
-                        const startA = new Date(`${a.date}T${a.startTime}:00`);
-                        const startB = new Date(`${b.date}T${b.startTime}:00`);
+                        const startA = a.startAt ? new Date(a.startAt) : new Date(`${a.date}T${a.startTime}:00`);
+                        const startB = b.startAt ? new Date(b.startAt) : new Date(`${b.date}T${b.startTime}:00`);
                         if (this.user?.role === 'trainer') {
                             return startA - startB;
                         } else {
