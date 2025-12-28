@@ -13,18 +13,18 @@ class ReservationCreate(BaseModel):
 class ReservationResponse(BaseModel):
     """予約応答スキーマ"""
     id: str
-    userId: str
-    user_name: str
-    trainerId: str
+    userId: Optional[str] = "unknown"
+    user_name: Optional[str] = "不明"
+    trainerId: Optional[str] = "unknown"
     date: str
     startTime: str
-    endTime: str
-    courseMinutes: int
-    status: str
+    endTime: Optional[str] = "--:--"
+    courseMinutes: Optional[int] = 60
+    status: str = "active"
     startAt: Optional[datetime] = None
     endAt: Optional[datetime] = None
-    createdAt: str
-    updatedAt: str
+    createdAt: Optional[str] = None
+    updatedAt: Optional[str] = None
 
     class Config:
         from_attributes = True
