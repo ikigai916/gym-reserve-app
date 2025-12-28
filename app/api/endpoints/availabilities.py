@@ -103,8 +103,8 @@ async def delete_availability(
         if data["isBooked"]:
             raise HTTPException(status_code=400, detail="予約済みの枠は削除できません")
             
-            doc_ref.delete()
-            return {"status": "success", "id": availability_id}
-        except Exception as e:
-            raise HTTPException(status_code=500, detail=str(e))
+        doc_ref.delete()
+        return {"status": "success", "id": availability_id}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
