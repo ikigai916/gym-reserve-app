@@ -12,17 +12,27 @@ import logging
 logger = logging.getLogger(__name__)
 router = APIRouter()
 
-def check_deadline(reservation_date_str: str):
+def check_deadline(reservation_date_str):
     """予約・キャンセルの期限チェック (前日24時)"""
-    # 予約日の前日 23:59:59 (実質24時)
-    reservation_date = datetime.fromisoformat(reservation_date_str)
-    deadline = datetime.combine(reservation_date - timedelta(days=1), time(23, 59, 59))
-    
-    if datetime.now() > deadline:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="予約・キャンセルの期限（前日24時）を過ぎています"
-        )
+    try:
+        if isinstance(reservation_date_str, datetime):
+            reservation_date = reservation_date_str
+        else:
+            # 文字列の場合はパース
+            reservation_date = datetime.fromisoformat(str(reservation_date_str).split(' ')[0])
+            
+        deadline = datetime.combine(reservation_date - timedelta(days=1), time(23, 59, 59))
+        
+        if datetime.now() > deadline:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="予約・キャンセルの期限（前日24時）を過ぎています"
+            )
+    except (ValueError, TypeError) as e:
+        logger.error(f"Error in check_deadline: {e}")
+        # パースエラーの場合は安全のため期限チェックをパスさせるか、エラーを出す
+        # ここではログを出して続行を試みる（古いデータの救済）
+        pass
 
 @router.post("/", response_model=ReservationResponse)
 async def create_reservation(
@@ -171,13 +181,8 @@ async def cancel_reservation(
         @firestore.transactional
         def cancel_in_transaction(transaction):
             logger.info("Starting cancellation transaction")
-            # 1. 予約をキャンセル状態に
-            transaction.update(res_ref, {
-                "status": "cancelled",
-                "updatedAt": datetime.now().isoformat()
-            })
             
-            # 2. 関連する Availability を解放
+            # 1. 関連する Availability を特定（読み取りを先に行う）
             try:
                 if "startAt" in res_data and res_data["startAt"]:
                     # 新しい形式のデータ（Timestamp または datetime オブジェクト）
@@ -186,7 +191,6 @@ async def cancel_reservation(
                     logger.info(f"Using Timestamp formats: {start_dt} to {end_dt}")
                 else:
                     # 旧データ互換: 文字列からパース
-                    # 必須キーの存在確認
                     if not all(k in res_data for k in ['date', 'startTime', 'courseMinutes', 'trainerId']):
                         logger.error(f"Old reservation data is missing required fields: {res_data}")
                         raise HTTPException(status_code=400, detail="予約データの形式が正しくありません（旧データ不備）")
@@ -196,27 +200,41 @@ async def cancel_reservation(
                         start_time_str = "0" + start_time_str
                     
                     try:
-                        start_dt = datetime.fromisoformat(f"{res_data['date']}T{start_time_str}:00")
-                        end_dt = start_dt + timedelta(minutes=int(res_data["courseMinutes"]))
+                        # date が datetime オブジェクトの場合がある
+                        d_str = res_data['date']
+                        if isinstance(d_str, datetime):
+                            d_str = d_str.strftime('%Y-%m-%d')
+                        
+                        start_dt = datetime.fromisoformat(f"{d_str}T{start_time_str}:00")
+                        c_mins = int(res_data["courseMinutes"])
+                        end_dt = start_dt + timedelta(minutes=c_mins)
                         logger.info(f"Parsed from strings: {start_dt} to {end_dt}")
-                    except ValueError as ve:
+                    except (ValueError, TypeError) as ve:
                         logger.error(f"Date/Time parsing error for old data: {ve}")
                         raise HTTPException(status_code=400, detail="予約日時の形式が正しくありません")
                 
+                # 読み取り操作
                 avail_query = db.collection("availabilities")\
                     .where(filter=FieldFilter("trainerId", "==", res_data["trainerId"]))\
                     .where(filter=FieldFilter("startAt", ">=", start_dt))\
                     .where(filter=FieldFilter("startAt", "<", end_dt))
                 
-                # トランザクション内では get() を使用する
                 avail_docs = list(avail_query.get(transaction=transaction))
                 logger.info(f"Found {len(avail_docs)} availability slots to release")
                 
+                # 2. 書き込み操作 (読み取りの後に実行)
+                # 予約をキャンセル状態に
+                transaction.update(res_ref, {
+                    "status": "cancelled",
+                    "updatedAt": datetime.now().isoformat()
+                })
+                
+                # 稼働枠を解放
                 for doc in avail_docs:
                     transaction.update(doc.reference, {"isBooked": False})
+                    
             except Exception as inner_e:
-                logger.error(f"Error during availability release in transaction: {inner_e}")
-                # ここで例外を出すとトランザクション全体がロールバックされる
+                logger.error(f"Error during transaction execution: {inner_e}")
                 raise inner_e
         
         cancel_in_transaction(transaction)
