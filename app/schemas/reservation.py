@@ -20,6 +20,8 @@ class ReservationResponse(BaseModel):
     endTime: str
     courseMinutes: int
     status: str
+    startAt: Optional[datetime] = None
+    endAt: Optional[datetime] = None
     createdAt: str
     updatedAt: str
 

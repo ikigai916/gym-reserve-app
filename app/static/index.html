@@ -448,24 +448,52 @@
                 <div x-show="!isLoading.reservations && sortedReservations.length === 0" class="text-stone-400 text-xs italic">予定されているセッションはありません。</div>
                 <div x-show="!isLoading.reservations" class="space-y-4">
                     <template x-for="res in sortedReservations">
-                        <div :class="res.status === 'active' ? 'bg-white border-stone-200' : 'bg-stone-50 border-stone-100 opacity-60'" 
-                             class="p-5 rounded-2xl border shadow-sm transition">
-                            <div class="flex justify-between items-start mb-2">
-                                <span class="text-[10px] font-medium text-stone-400 uppercase tracking-wider" x-text="res.date"></span>
-                                <span :class="res.status === 'active' ? 'text-green-600' : 'text-stone-400'" 
-                                      class="text-[10px] font-bold uppercase" x-text="res.status === 'active' ? '確定' : '取消済'"></span>
-                            </div>
-                            <div class="text-sm font-medium mb-1" x-text="(res.startTime || '??:??') + ' - ' + (res.endTime || '??:??')"></div>
-                            <div class="text-[10px] text-stone-500 mb-1" x-text="(user?.role === 'trainer' ? '予約者: ' : 'トレーナー: ') + (user?.role === 'trainer' ? (res.user_name || '不明') : (trainers.find(t => t.id === res.trainerId)?.name || '不明'))"></div>
-                            <div class="text-xs text-stone-500 mb-3" x-text="(res.courseMinutes || '--') + '分セッション'"></div>
+                        <div :class="{
+                                 'bg-white border-stone-200': res.status === 'active' && !res.isPast,
+                                 'bg-stone-50 border-stone-100 opacity-60 grayscale': res.status === 'cancelled' || res.isPast,
+                                 'border-indigo-200 bg-indigo-50/30': res.isOngoing && res.status === 'active'
+                             }" 
+                             class="p-6 rounded-3xl border shadow-sm transition-all duration-300">
                             
-                            <div class="flex flex-col gap-2">
-                                <button x-show="res.status === 'active' && !isDeadlinePassed(res.date)" 
-                                        @click="cancelReservation(res.id)" 
-                                        class="text-[10px] text-stone-400 hover:text-red-500 transition underline underline-offset-4 text-left">予約をキャンセルする</button>
+                            <!-- ステータスタグ -->
+                            <div class="flex justify-between items-center mb-4">
+                                <div class="px-2 py-0.5 rounded-md text-[9px] font-bold uppercase tracking-wider"
+                                     :class="{
+                                         'bg-green-100 text-green-700': res.status === 'active' && !res.isPast && !res.isOngoing,
+                                         'bg-indigo-100 text-indigo-700 animate-pulse': res.isOngoing && res.status === 'active',
+                                         'bg-stone-200 text-stone-500': res.isPast && res.status === 'active',
+                                         'bg-red-50 text-red-400': res.status === 'cancelled'
+                                     }"
+                                     x-text="res.isOngoing && res.status === 'active' ? '実施中' : (res.isPast ? '終了' : (res.status === 'active' ? '確定' : '取消済'))">
+                                </div>
+                                <span class="text-[10px] font-bold text-stone-400" x-text="res.date.split('-').slice(1).join('/')"></span>
+                            </div>
+
+                            <div class="flex items-end justify-between mb-4">
+                                <div class="text-xl font-bold text-stone-800" x-text="res.startTime + ' - ' + res.endTime"></div>
+                                <div class="text-[10px] font-medium text-stone-500" x-text="res.courseMinutes + '分'"></div>
+                            </div>
+
+                            <div class="space-y-1 mb-4">
+                                <div class="text-[10px] text-stone-400 font-bold uppercase tracking-wider" x-text="user?.role === 'trainer' ? '予約者' : '担当トレーナー'"></div>
+                                <div class="text-sm font-medium text-stone-700" x-text="user?.role === 'trainer' ? (res.user_name || '不明') : (trainers.find(t => t.id === res.trainerId)?.name || '不明') + ' 先生'"></div>
+                            </div>
+                            
+                            <div class="pt-4 border-t border-stone-100 flex flex-col gap-2">
+                                <template x-if="res.status === 'active' && !res.isPast && !isDeadlinePassed(res.date)">
+                                    <button @click="cancelReservation(res.id)" 
+                                            class="w-full py-2 rounded-xl text-[10px] font-bold text-red-400 hover:bg-red-50 transition border border-transparent hover:border-red-100">
+                                        予約をキャンセルする
+                                    </button>
+                                </template>
                                 
-                                <span x-show="res.status === 'active' && isDeadlinePassed(res.date)" 
-                                      class="text-[9px] text-stone-400 italic">キャンセル期限（前日24時）を過ぎています</span>
+                                <template x-if="res.status === 'active' && !res.isPast && isDeadlinePassed(res.date)">
+                                    <span class="text-[9px] text-stone-400 italic text-center">キャンセル期限を過ぎています</span>
+                                </template>
+
+                                <template x-if="res.isPast && res.status === 'active'">
+                                    <span class="text-[9px] text-stone-400 font-medium text-center">セッションは終了しました</span>
+                                </template>
                             </div>
                         </div>
                     </template>
@@ -819,14 +847,31 @@
                 },
 
                 get sortedReservations() {
-                    return [...this.myReservations].sort((a, b) => {
+                    const now = new Date();
+                    return [...this.myReservations].map(res => {
+                        const start = new Date(`${res.date}T${res.startTime}:00`);
+                        // endTime が HH:mm 形式なので、同じ日付の時刻としてパース
+                        const end = new Date(`${res.date}T${res.endTime}:00`);
+                        
+                        return {
+                            ...res,
+                            isPast: end < now,
+                            isOngoing: start <= now && end >= now,
+                            isUpcoming: start > now
+                        };
+                    }).sort((a, b) => {
                         const startA = new Date(`${a.date}T${a.startTime}:00`);
                         const startB = new Date(`${b.date}T${b.startTime}:00`);
                         if (this.user?.role === 'trainer') {
-                            // トレーナーは未来の予約が上に来るように
                             return startA - startB;
                         } else {
-                            // トレーニーは直近の作成（または予約日）が上に来るように
+                            // 完了済みやキャンセル済みは下に、未来の予約を上にする
+                            if (a.status !== b.status) {
+                                return a.status === 'active' ? -1 : 1;
+                            }
+                            if (a.isPast !== b.isPast) {
+                                return a.isPast ? 1 : -1;
+                            }
                             return startB - startA;
                         }
                     });

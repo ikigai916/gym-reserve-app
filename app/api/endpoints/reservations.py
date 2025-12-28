@@ -80,6 +80,8 @@ async def create_reservation(
                 "endTime": end_dt.strftime("%H:%M"),
                 "courseMinutes": res.courseMinutes,
                 "status": "active",
+                "startAt": start_dt,
+                "endAt": end_dt,
                 "createdAt": now,
                 "updatedAt": now
             }
@@ -162,8 +164,14 @@ async def cancel_reservation(
             })
             
             # 2. 関連する Availability を解放
-            start_dt = datetime.fromisoformat(f"{res_data['date']}T{res_data['startTime']}:00")
-            end_dt = start_dt + timedelta(minutes=res_data["courseMinutes"])
+            if "startAt" in res_data and "endAt" in res_data:
+                # 新しい形式のデータ（Timestamp オブジェクト）
+                start_dt = res_data["startAt"]
+                end_dt = res_data["endAt"]
+            else:
+                # 旧データ互換: 文字列からパース（タイムゾーンに注意）
+                start_dt = datetime.fromisoformat(f"{res_data['date']}T{res_data['startTime']}:00")
+                end_dt = start_dt + timedelta(minutes=res_data["courseMinutes"])
             
             avail_query = db.collection("availabilities")\
                 .where(filter=FieldFilter("trainerId", "==", res_data["trainerId"]))\
