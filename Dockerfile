@@ -11,21 +11,12 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PIP_DISABLE_PIP_VERSION_CHECK=1 \
     PYTHONPATH=/app
 
-# requirements.txtをコピーしてパッケージをインストール
-COPY requirements.txt /app/requirements.txt
-RUN pip install --no-cache-dir -r /app/requirements.txt
+# 依存関係をコピーしてインストール
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
 
 # アプリケーションコードをコピー
-# app/ フォルダ全体をコピーします（static も含む）
-COPY app /app/app
+COPY . .
 
-# Cloud Run のデフォルトポート 8080 を公開設定にする
-EXPOSE 8080
-
-# ヘルスチェックのポートも 8080 に変更
-HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-    CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8080/health')" || exit 1
-
-# uvicornの起動コマンド
-# Cloud Run の $PORT 環境変数を使用するように変更
+# Cloud Run の $PORT 環境変数を使用して起動
 CMD ["sh", "-c", "uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8080}"]

@@ -4,12 +4,17 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 import os
 import logging
+import sys
 
-# ロギング設定
-logging.basicConfig(level=logging.INFO)
+# ロギング設定を一番最初に行う
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+    handlers=[logging.StreamHandler(sys.stdout)]
+)
 logger = logging.getLogger(__name__)
 
-logger.info("Starting application...")
+logger.info("Application starting process...")
 
 from app.api.router import api_router
 from app.core.config import settings
