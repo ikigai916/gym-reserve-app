@@ -14,6 +14,19 @@
             .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
             .custom-scrollbar::-webkit-scrollbar-thumb { background: #e7e5e4; border-radius: 10px; }
             .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #d6d3d1; }
+            
+            /* アクセシビリティ：フォーカスリング */
+            button:focus-visible, input:focus-visible {
+                outline: 2px solid #292524;
+                outline-offset: 2px;
+            }
+
+            /* スケルトンアニメーション */
+            @keyframes pulse {
+                0%, 100% { opacity: 1; }
+                50% { opacity: .5; }
+            }
+            .animate-pulse { animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite; }
         </style>
 </head>
 <body class="bg-stone-50 text-stone-800 min-h-screen" x-data="app()" x-init="init()" x-cloak>
@@ -35,50 +48,170 @@
     </header>
 
     <main class="max-w-4xl mx-auto px-6 py-10">
-        <!-- トレーニー向け：次の予約 -->
-        <section x-show="user?.role === 'trainee' && nextReservation" class="mb-12">
-            <h3 class="text-sm font-medium text-stone-500 mb-4 tracking-widest uppercase flex items-center">
-                <span class="w-2 h-2 bg-indigo-500 rounded-full mr-2"></span>
-                次回のセッション
-            </h3>
-            <div class="bg-indigo-50 border border-indigo-100 rounded-2xl p-6 flex flex-col md:flex-row justify-between items-center gap-4">
-                <div class="flex items-center gap-6">
-                    <div class="bg-white rounded-xl p-3 text-center min-w-[100px] shadow-sm">
-                        <div class="text-[10px] text-stone-400 font-bold uppercase" x-text="nextReservation?.date"></div>
-                        <div class="text-lg font-bold text-indigo-600" x-text="nextReservation?.startTime"></div>
-                    </div>
-                    <div>
-                        <div class="text-xs text-indigo-400 font-medium mb-1 uppercase tracking-wider">担当トレーナー</div>
-                        <div class="text-xl font-medium text-stone-800" x-text="(trainers.find(t => t.id === nextReservation?.trainerId)?.name || 'トレーナー') + ' 先生'"></div>
-                    </div>
+        <!-- 通知（トースト） -->
+        <div class="fixed bottom-6 right-6 z-50 flex flex-col gap-3 pointer-events-none">
+            <template x-for="note in notifications" :key="note.id">
+                <div x-show="note.show"
+                     x-transition:enter="transition ease-out duration-300"
+                     x-transition:enter-start="opacity-0 transform translate-y-2"
+                     x-transition:enter-end="opacity-100 transform translate-y-0"
+                     x-transition:leave="transition ease-in duration-200"
+                     x-transition:leave-start="opacity-100 transform translate-y-0"
+                     x-transition:leave-end="opacity-0 transform translate-y-2"
+                     class="pointer-events-auto px-6 py-3 rounded-2xl shadow-xl border flex items-center gap-3 min-w-[280px]"
+                     :class="{
+                         'bg-white border-green-100 text-green-800': note.type === 'success',
+                         'bg-white border-red-100 text-red-800': note.type === 'error',
+                         'bg-white border-stone-200 text-stone-800': note.type === 'info'
+                     }">
+                    <span x-show="note.type === 'success'" class="text-green-500">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
+                    </span>
+                    <span x-show="note.type === 'error'" class="text-red-500">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                    </span>
+                    <span class="text-sm font-medium" x-text="note.message"></span>
                 </div>
-                <div class="text-right">
-                    <div class="text-xs text-indigo-400 font-medium mb-1 uppercase tracking-wider">コース</div>
-                    <div class="text-sm font-medium text-stone-600" x-text="nextReservation?.courseMinutes + '分セッション'"></div>
+            </template>
+        </div>
+
+        <!-- カスタムモーダル -->
+        <div x-show="modal.show" 
+             x-transition:enter="transition ease-out duration-300"
+             x-transition:enter-start="opacity-0"
+             x-transition:enter-end="opacity-100"
+             x-transition:leave="transition ease-in duration-200"
+             x-transition:leave-start="opacity-100"
+             x-transition:leave-end="opacity-0"
+             class="fixed inset-0 z-50 flex items-center justify-center p-6 bg-stone-900/40 backdrop-blur-sm"
+             @click.self="modal.show = false">
+            <div class="bg-white w-full max-w-sm rounded-3xl p-8 shadow-2xl border border-stone-100">
+                <h4 class="text-lg font-medium mb-2" x-text="modal.title"></h4>
+                <p class="text-stone-500 text-sm mb-8 leading-relaxed" x-text="modal.message"></p>
+                <div class="flex gap-3">
+                    <button @click="modal.show = false" class="flex-1 py-3 px-4 rounded-xl text-sm font-medium border border-stone-200 hover:bg-stone-50 transition">キャンセル</button>
+                    <button @click="modal.confirmAction(); modal.show = false" 
+                            class="flex-1 py-3 px-4 rounded-xl text-sm font-medium text-white shadow-md transition"
+                            :class="modal.danger ? 'bg-red-500 hover:bg-red-600' : 'bg-stone-800 hover:bg-stone-700'"
+                            x-text="modal.confirmText"></button>
+                </div>
+            </div>
+        </div>
+
+        <!-- トレーナー向け：ダッシュボード -->
+        <section x-show="user?.role === 'trainer'" class="mb-12 grid grid-cols-1 md:grid-cols-2 gap-6">
+            <!-- 次の予約 -->
+            <div class="bg-indigo-50 border border-indigo-100 rounded-3xl p-8 flex flex-col justify-between min-h-[180px]">
+                <div>
+                    <h3 class="text-[10px] font-bold text-indigo-400 uppercase tracking-widest mb-4 flex items-center">
+                        <span class="w-1.5 h-1.5 bg-indigo-500 rounded-full mr-2"></span>
+                        次回のセッション
+                    </h3>
+                    <template x-if="nextReservation">
+                        <div class="flex items-start gap-4">
+                            <div class="bg-white rounded-2xl p-3 text-center min-w-[80px] shadow-sm border border-indigo-100">
+                                <div class="text-[10px] text-stone-400 font-bold uppercase" x-text="nextReservation.date.split('-').slice(1).join('/')"></div>
+                                <div class="text-xl font-bold text-indigo-600" x-text="nextReservation.startTime"></div>
+                            </div>
+                            <div>
+                                <div class="text-lg font-medium text-stone-800" x-text="nextReservation.user_name + ' 様'"></div>
+                                <div class="text-xs text-stone-500" x-text="nextReservation.courseMinutes + '分セッション'"></div>
+                            </div>
+                        </div>
+                    </template>
+                    <template x-if="!nextReservation">
+                        <p class="text-indigo-300 text-sm italic">予定されている予約はありません</p>
+                    </template>
+                </div>
+            </div>
+
+            <!-- 今週のサマリ -->
+            <div class="bg-white border border-stone-200 rounded-3xl p-8 flex flex-col justify-between min-h-[180px] shadow-sm">
+                <div>
+                    <h3 class="text-[10px] font-bold text-stone-400 uppercase tracking-widest mb-4 flex items-center">
+                        <span class="w-1.5 h-1.5 bg-stone-800 rounded-full mr-2"></span>
+                        今週の稼働状況
+                    </h3>
+                    <div class="grid grid-cols-2 gap-4">
+                        <div class="bg-stone-50 rounded-2xl p-4">
+                            <div class="text-[10px] text-stone-400 font-bold uppercase mb-1">セッション数</div>
+                            <div class="text-2xl font-bold text-stone-800" x-text="weeklyStats?.count || 0"></div>
+                        </div>
+                        <div class="bg-stone-50 rounded-2xl p-4">
+                            <div class="text-[10px] text-stone-400 font-bold uppercase mb-1">合計時間(分)</div>
+                            <div class="text-2xl font-bold text-stone-800" x-text="weeklyStats?.totalMinutes || 0"></div>
+                        </div>
+                    </div>
                 </div>
             </div>
         </section>
 
-        <!-- トレーナー向け：次の予約 -->
-        <section x-show="user?.role === 'trainer' && nextReservation" class="mb-12">
-            <h3 class="text-sm font-medium text-stone-500 mb-4 tracking-widest uppercase flex items-center">
-                <span class="w-2 h-2 bg-indigo-500 rounded-full mr-2"></span>
-                次回のセッション
-            </h3>
-            <div class="bg-indigo-50 border border-indigo-100 rounded-2xl p-6 flex flex-col md:flex-row justify-between items-center gap-4">
-                <div class="flex items-center gap-6">
-                    <div class="bg-white rounded-xl p-3 text-center min-w-[100px] shadow-sm">
-                        <div class="text-[10px] text-stone-400 font-bold uppercase" x-text="nextReservation?.date"></div>
-                        <div class="text-lg font-bold text-indigo-600" x-text="nextReservation?.startTime"></div>
-                    </div>
+        <!-- トレーニー向け：次の予約とクイック予約 -->
+        <section x-show="user?.role === 'trainee'" class="mb-12 space-y-8">
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <!-- 次の予約 -->
+                <div class="md:col-span-1 bg-indigo-50 border border-indigo-100 rounded-3xl p-8 flex flex-col justify-between min-h-[200px]">
                     <div>
-                        <div class="text-xs text-indigo-400 font-medium mb-1 uppercase tracking-wider">予約者</div>
-                        <div class="text-xl font-medium text-stone-800" x-text="nextReservation?.user_name + ' 様'"></div>
+                        <h3 class="text-[10px] font-bold text-indigo-400 uppercase tracking-widest mb-4 flex items-center">
+                            <span class="w-1.5 h-1.5 bg-indigo-500 rounded-full mr-2"></span>
+                            次回のセッション
+                        </h3>
+                        <template x-if="nextReservation">
+                            <div class="space-y-4">
+                                <div class="bg-white rounded-2xl p-3 text-center min-w-[80px] shadow-sm border border-indigo-100 inline-block">
+                                    <div class="text-[10px] text-stone-400 font-bold uppercase" x-text="nextReservation.date"></div>
+                                    <div class="text-xl font-bold text-indigo-600" x-text="nextReservation.startTime"></div>
+                                </div>
+                                <div>
+                                    <div class="text-xs text-indigo-400 font-bold mb-1 uppercase">担当</div>
+                                    <div class="text-lg font-medium text-stone-800" x-text="(trainers.find(t => t.id === nextReservation.trainerId)?.name || 'トレーナー') + ' 先生'"></div>
+                                </div>
+                            </div>
+                        </template>
+                        <template x-if="!nextReservation">
+                            <p class="text-indigo-300 text-sm italic">予定されている予約はありません</p>
+                        </template>
                     </div>
                 </div>
-                <div class="text-right">
-                    <div class="text-xs text-indigo-400 font-medium mb-1 uppercase tracking-wider">コース</div>
-                    <div class="text-sm font-medium text-stone-600" x-text="nextReservation?.courseMinutes + '分セッション'"></div>
+
+                <!-- 直近の空き枠クイック表示 -->
+                <div class="md:col-span-2 bg-white border border-stone-200 rounded-3xl p-8 shadow-sm">
+                    <h3 class="text-[10px] font-bold text-stone-400 uppercase tracking-widest mb-6 flex items-center justify-between">
+                        <div class="flex items-center">
+                            <span class="w-1.5 h-1.5 bg-stone-800 rounded-full mr-2"></span>
+                            直近の空き状況
+                        </div>
+                        <a href="#" @click.prevent="selectedDate = quickAvailDateRange[0]" class="text-stone-400 hover:text-stone-800 underline underline-offset-4 font-medium transition">全日程を見る</a>
+                    </h3>
+                    <div class="grid grid-cols-3 gap-4">
+                        <template x-if="isLoading.availabilities && quickAvailSlots.length === 0">
+                            <template x-for="i in [1,2,3]">
+                                <div class="space-y-3 animate-pulse">
+                                    <div class="h-4 bg-stone-100 rounded w-1/2"></div>
+                                    <div class="space-y-2">
+                                        <div class="h-8 bg-stone-50 rounded-xl"></div>
+                                        <div class="h-8 bg-stone-50 rounded-xl"></div>
+                                    </div>
+                                </div>
+                            </template>
+                        </template>
+                        <template x-for="day in quickAvailSlots" :key="day.date">
+                            <div class="space-y-3">
+                                <div class="text-xs font-bold text-stone-800 border-b border-stone-100 pb-2" x-text="day.date.split('-').slice(1).join('/')"></div>
+                                <div class="space-y-2">
+                                    <template x-for="slot in day.slots">
+                                        <button @click="selectedDate = day.date; selectedTrainerId = slot.trainerId; setTimeout(() => loadAvailableSlots(), 100)" 
+                                                class="w-full py-2 px-3 bg-stone-50 hover:bg-stone-800 hover:text-white rounded-xl text-[10px] font-bold transition text-stone-600 border border-transparent hover:border-stone-800">
+                                            <span x-text="formatTime(slot.startAt)"></span>
+                                        </button>
+                                    </template>
+                                    <template x-if="day.slots.length === 0">
+                                        <div class="text-[10px] text-stone-300 italic py-2 text-center">空きなし</div>
+                                    </template>
+                                </div>
+                            </div>
+                        </template>
+                    </div>
                 </div>
             </div>
         </section>
@@ -120,8 +253,18 @@
                             </div>
                         </div>
 
+                        <div class="pt-4 border-t border-stone-100">
+                            <button @click="copyLastWeek()" 
+                                    :disabled="!availDate || isLoading.submit"
+                                    class="w-full bg-white border border-stone-200 text-stone-600 py-3 rounded-xl text-sm font-medium hover:bg-stone-50 transition disabled:opacity-50 shadow-sm flex items-center justify-center gap-2">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7v8a2 2 0 002 2h6M8 7V5a2 2 0 012-2h4.586a1 1 0 01.707.293l4.414 4.414a1 1 0 01.293.707V15a2 2 0 01-2 2h-2M8 7H6a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2v-2"></path></svg>
+                                前週の同じ曜日からコピー
+                            </button>
+                            <p class="text-[9px] text-stone-400 mt-2 text-center">先週登録した枠をそのままコピーします</p>
+                        </div>
+
                         <button @click="registerAvailability()" 
-                                :disabled="!availDate"
+                                :disabled="!availDate || isLoading.submit"
                                 class="w-full bg-stone-800 text-white py-3 rounded-xl text-sm font-medium hover:bg-stone-700 transition disabled:bg-stone-200 disabled:cursor-not-allowed shadow-md">
                             選択した範囲で枠を生成
                         </button>
@@ -206,8 +349,15 @@
 
                 <!-- ステップ2: 日付選択 -->
                 <div>
-                    <h3 class="text-sm font-medium text-stone-500 mb-4 tracking-widest uppercase">2. 日付を選択</h3>
-                    <div class="bg-white p-6 rounded-2xl border border-stone-200">
+                    <div class="flex justify-between items-end mb-4">
+                        <h3 class="text-sm font-medium text-stone-500 tracking-widest uppercase">2. 日付を選択</h3>
+                        <div class="flex gap-2">
+                            <button @click="const d = new Date(); selectedDate = d.toISOString().split('T')[0]; currentDate = d" class="text-[10px] font-bold text-stone-400 hover:text-stone-800 transition uppercase tracking-tighter bg-stone-100 px-2 py-1 rounded-lg">今日</button>
+                            <button @click="const d = new Date(); d.setDate(d.getDate()+1); selectedDate = d.toISOString().split('T')[0]; currentDate = d" class="text-[10px] font-bold text-stone-400 hover:text-stone-800 transition uppercase tracking-tighter bg-stone-100 px-2 py-1 rounded-lg">明日</button>
+                            <button @click="const d = new Date(); const diff = (d.getDay() === 0 ? 0 : 7 - d.getDay()); d.setDate(d.getDate() + diff); selectedDate = d.toISOString().split('T')[0]; currentDate = d" class="text-[10px] font-bold text-stone-400 hover:text-stone-800 transition uppercase tracking-tighter bg-stone-100 px-2 py-1 rounded-lg">日曜</button>
+                        </div>
+                    </div>
+                    <div class="bg-white p-6 rounded-2xl border border-stone-200 shadow-sm">
                         <div class="flex justify-between items-center mb-6">
                             <button @click="prevMonth()" class="text-stone-400 hover:text-stone-800 transition">←</button>
                             <span class="font-medium" x-text="currentMonthLabel"></span>
@@ -238,21 +388,48 @@
 
                 <!-- ステップ3: 時間枠選択 -->
                 <div x-show="selectedDate">
-                    <h3 class="text-sm font-medium text-stone-500 mb-4 tracking-widest uppercase">3. 時間を選択</h3>
-                    <div x-show="availableSlots.length === 0" class="text-stone-400 text-sm py-4">この日の予約可能な枠はありません。</div>
+                    <div class="flex justify-between items-end mb-4">
+                        <h3 class="text-sm font-medium text-stone-500 tracking-widest uppercase">3. 時間を選択</h3>
+                        <label class="flex items-center gap-2 cursor-pointer group">
+                            <span class="text-[10px] font-bold text-stone-400 group-hover:text-stone-600 transition uppercase tracking-tighter">空き枠のみ</span>
+                            <div class="relative inline-block w-8 h-4 transition duration-200 ease-in-out">
+                                <input type="checkbox" x-model="showOnlyAvailable" class="opacity-0 w-0 h-0">
+                                <span :class="showOnlyAvailable ? 'bg-stone-800' : 'bg-stone-200'" class="absolute inset-0 rounded-full transition-colors duration-200"></span>
+                                <span :class="showOnlyAvailable ? 'translate-x-4' : 'translate-x-0'" class="absolute left-0.5 top-0.5 w-3 h-3 bg-white rounded-full transition-transform duration-200"></span>
+                            </div>
+                        </label>
+                    </div>
+                    <div x-show="availableSlots.filter(s => !showOnlyAvailable || s.status === 'available').length === 0" class="text-stone-400 text-sm py-4 italic">表示できる予約枠がありません。</div>
                     <div class="grid grid-cols-3 sm:grid-cols-5 gap-3">
-                        <template x-for="slot in availableSlots">
+                        <template x-if="isLoading.availabilities">
+                            <template x-for="i in [1,2,3,4,5,6,7,8,9,10]">
+                                <div class="h-14 bg-stone-50 rounded-2xl animate-pulse"></div>
+                            </template>
+                        </template>
+                        <template x-for="slot in availableSlots.filter(s => !showOnlyAvailable || s.status === 'available')">
                             <button @click="slot.status === 'available' && confirmReservation(slot)" 
                                     :disabled="slot.status !== 'available'"
                                     :class="{
-                                        'bg-white border-stone-200 hover:border-stone-800 text-stone-800': slot.status === 'available',
+                                        'bg-white border-stone-200 hover:border-stone-800 text-stone-800 shadow-sm': slot.status === 'available',
                                         'bg-stone-100 border-stone-100 text-stone-400 cursor-not-allowed': slot.status === 'booked',
-                                        'bg-white border-stone-100 text-stone-300 cursor-not-allowed opacity-50': slot.status === 'insufficient'
+                                        'bg-stone-50/50 border-stone-100 text-stone-300 cursor-not-allowed opacity-60': slot.status === 'insufficient'
                                     }"
-                                    class="border py-3 rounded-xl text-sm transition relative">
-                                <span x-text="slot.time"></span>
+                                    class="border py-4 rounded-2xl text-sm transition relative group overflow-hidden">
+                                <span class="font-bold" x-text="slot.time"></span>
+                                
                                 <template x-if="slot.status === 'booked'">
-                                    <span class="absolute top-1 right-2 text-[8px] font-bold text-stone-400 uppercase">済</span>
+                                    <span class="absolute top-0 right-0 bg-stone-200 text-stone-500 text-[7px] font-bold px-1.5 py-0.5 rounded-bl-lg uppercase tracking-tighter">予約済</span>
+                                </template>
+
+                                <template x-if="slot.status === 'insufficient'">
+                                    <span class="absolute inset-x-0 bottom-0 bg-stone-100 text-stone-400 text-[7px] py-0.5 font-medium truncate px-1" x-text="selectedCourse + '分不可'"></span>
+                                </template>
+
+                                <!-- ホバー時に理由を表示（デスクトップ） -->
+                                <template x-if="slot.status === 'insufficient' && slot.reason">
+                                    <div class="absolute inset-0 bg-stone-800 text-white text-[8px] p-2 flex items-center justify-center opacity-0 group-hover:opacity-100 transition duration-200">
+                                        <span x-text="slot.reason"></span>
+                                    </div>
                                 </template>
                             </button>
                         </template>
@@ -263,8 +440,13 @@
             <!-- サイドバー: 自分の予約 -->
             <aside class="space-y-8">
                 <h3 class="text-sm font-medium text-stone-500 tracking-widest uppercase" x-text="user?.role === 'trainer' ? 'セッション予定' : '予約状況'"></h3>
-                <div x-show="sortedReservations.length === 0" class="text-stone-400 text-xs">予定されているセッションはありません。</div>
-                <div class="space-y-4">
+                <div x-show="isLoading.reservations" class="space-y-4 animate-pulse">
+                    <template x-for="i in [1,2,3]">
+                        <div class="h-32 bg-stone-100 rounded-2xl border border-stone-100"></div>
+                    </template>
+                </div>
+                <div x-show="!isLoading.reservations && sortedReservations.length === 0" class="text-stone-400 text-xs italic">予定されているセッションはありません。</div>
+                <div x-show="!isLoading.reservations" class="space-y-4">
                     <template x-for="res in sortedReservations">
                         <div :class="res.status === 'active' ? 'bg-white border-stone-200' : 'bg-stone-50 border-stone-100 opacity-60'" 
                              class="p-5 rounded-2xl border shadow-sm transition">
@@ -276,9 +458,15 @@
                             <div class="text-sm font-medium mb-1" x-text="(res.startTime || '??:??') + ' - ' + (res.endTime || '??:??')"></div>
                             <div class="text-[10px] text-stone-500 mb-1" x-text="(user?.role === 'trainer' ? '予約者: ' : 'トレーナー: ') + (user?.role === 'trainer' ? (res.user_name || '不明') : (trainers.find(t => t.id === res.trainerId)?.name || '不明'))"></div>
                             <div class="text-xs text-stone-500 mb-3" x-text="(res.courseMinutes || '--') + '分セッション'"></div>
-                            <button x-show="res.status === 'active'" 
-                                    @click="cancelReservation(res.id)" 
-                                    class="text-[10px] text-stone-400 hover:text-red-500 transition underline underline-offset-4">予約をキャンセルする</button>
+                            
+                            <div class="flex flex-col gap-2">
+                                <button x-show="res.status === 'active' && !isDeadlinePassed(res.date)" 
+                                        @click="cancelReservation(res.id)" 
+                                        class="text-[10px] text-stone-400 hover:text-red-500 transition underline underline-offset-4 text-left">予約をキャンセルする</button>
+                                
+                                <span x-show="res.status === 'active' && isDeadlinePassed(res.date)" 
+                                      class="text-[9px] text-stone-400 italic">キャンセル期限（前日24時）を過ぎています</span>
+                            </div>
                         </div>
                     </template>
                 </div>
@@ -294,25 +482,45 @@
                 courses: [60, 90, 120, 150, 180],
                 selectedCourse: 60,
                 selectedTrainerId: null,
+                showOnlyAvailable: false,
                 trainers: [],
                 selectedDate: null,
                 currentDate: new Date(),
-                    myReservations: [],
-                    availableSlots: [],
-                    
-                    // トレーナー用
-                    availDate: '',
-                    availStartTime: '09:00',
-                    availEndTime: '23:00',
-                    trainerSlots: [],
+                myReservations: [],
+                availableSlots: [],
+                notifications: [],
+                isLoading: {
+                    reservations: false,
+                    availabilities: false,
+                    submit: false
+                },
+                modal: {
+                    show: false,
+                    title: '',
+                    message: '',
+                    confirmText: '実行',
+                    confirmAction: () => {},
+                    danger: false
+                },
+                
+                // トレーナー用
+                availDate: '',
+                availStartTime: '09:00',
+                availEndTime: '23:00',
+                trainerSlots: [],
+                
+                // トレーニー用
+                quickAvailDateRange: [],
+                quickAvailSlots: [],
 
-                    init() {
+                init() {
                         this.token = localStorage.getItem('kukan_token');
                         this.user = JSON.parse(localStorage.getItem('kukan_user'));
                         if (!this.token) window.location.href = '/login.html';
                         
                         this.loadMyReservations();
                         this.loadTrainers();
+                        this.loadQuickAvailableSlots();
                         
                         this.$watch('selectedDate', () => this.loadAvailableSlots());
                         this.$watch('selectedCourse', () => this.loadAvailableSlots());
@@ -339,6 +547,7 @@
                 },
 
                 async loadMyReservations() {
+                    this.isLoading.reservations = true;
                     try {
                         const res = await fetch('/api/reservations/', {
                             headers: { 'Authorization': `Bearer ${this.token}` }
@@ -347,11 +556,15 @@
                         this.myReservations = await res.json();
                     } catch (err) {
                         console.error('loadMyReservations error:', err);
+                        this.notify(err.message, 'error');
+                    } finally {
+                        this.isLoading.reservations = false;
                     }
                 },
 
                 async loadAvailableSlots() {
                     if (!this.selectedDate) return;
+                    this.isLoading.availabilities = true;
                     try {
                         let url = `/api/availabilities/?date=${this.selectedDate}`;
                         if (this.selectedTrainerId) {
@@ -365,6 +578,9 @@
                         this.availableSlots = this.calculateSlotStatuses(rawSlots, this.selectedCourse);
                     } catch (err) {
                         console.error('loadAvailableSlots error:', err);
+                        this.notify(err.message, 'error');
+                    } finally {
+                        this.isLoading.availabilities = false;
                     }
                 },
 
@@ -383,27 +599,33 @@
                 },
 
                     async deleteSlot(id) {
-                        if (!confirm('この枠を削除しますか？')) return;
-                        try {
-                            const res = await fetch(`/api/availabilities/${id}`, {
-                                method: 'DELETE',
-                                headers: { 'Authorization': `Bearer ${this.token}` }
-                            });
-                            if (res.ok) {
-                                // フロントエンドの状態を即座に更新
-                                this.trainerSlots = this.trainerSlots.filter(s => s.id !== id);
-                                if (this.selectedDate === this.availDate) {
-                                    this.loadAvailableSlots();
+                        this.confirmDialog(
+                            '稼働枠の削除',
+                            'この枠を削除しますか？予約が入っていない枠のみ削除可能です。',
+                            '削除する',
+                            async () => {
+                                try {
+                                    const res = await fetch(`/api/availabilities/${id}`, {
+                                        method: 'DELETE',
+                                        headers: { 'Authorization': `Bearer ${this.token}` }
+                                    });
+                                    if (res.ok) {
+                                        this.trainerSlots = this.trainerSlots.filter(s => s.id !== id);
+                                        if (this.selectedDate === this.availDate) {
+                                            this.loadAvailableSlots();
+                                        }
+                                        this.notify('稼働枠を削除しました');
+                                    } else {
+                                        const err = await res.json();
+                                        throw new Error(err.detail || '稼働枠の削除に失敗しました');
+                                    }
+                                } catch (err) {
+                                    console.error("Error deleting slot:", err);
+                                    this.notify(err.message, 'error');
                                 }
-                                alert('稼働枠を削除しました');
-                            } else {
-                                const err = await res.json();
-                                throw new Error(err.detail || '稼働枠の削除に失敗しました');
-                            }
-                        } catch (err) {
-                            console.error("Error deleting slot:", err);
-                            alert(err.message);
-                        }
+                            },
+                            true
+                        );
                     },
 
                 calculateSlotStatuses(allSlots, minutes) {
@@ -457,6 +679,7 @@
                         return {
                             time: timeStr,
                             status: bestStatus,
+                            reason: bestStatus === 'insufficient' ? `${minutes}分枠の確保には連続した空きが必要です` : '',
                             trainerId: targetTrainerId,
                             startAt: targetStartAt
                         };
@@ -464,70 +687,118 @@
                 },
 
                 async registerAvailability() {
-                    if (!this.availDate) return alert('日付を選択してください');
+                    if (!this.availDate) return this.notify('日付を選択してください', 'error');
                     
-                    // 30分単位でスロットを生成
-                    const slots = [];
-                    let current = new Date(`${this.availDate}T${this.availStartTime}:00`);
-                    const end = new Date(`${this.availDate}T${this.availEndTime}:00`);
-                    
-                    while (current < end) {
-                        const slotEnd = new Date(current.getTime() + 30 * 60000);
-                        slots.push({
-                            startAt: current.toISOString(),
-                            endAt: slotEnd.toISOString()
+                    this.isLoading.submit = true;
+                    try {
+                        // 30分単位でスロットを生成
+                        const slots = [];
+                        let current = new Date(`${this.availDate}T${this.availStartTime}:00`);
+                        const end = new Date(`${this.availDate}T${this.availEndTime}:00`);
+                        
+                        while (current < end) {
+                            const slotEnd = new Date(current.getTime() + 30 * 60000);
+                            slots.push({
+                                startAt: current.toISOString(),
+                                endAt: slotEnd.toISOString()
+                            });
+                            current = slotEnd;
+                        }
+
+                        const res = await fetch('/api/availabilities/', {
+                            method: 'POST',
+                            headers: { 
+                                'Content-Type': 'application/json',
+                                'Authorization': `Bearer ${this.token}`
+                            },
+                            body: JSON.stringify({
+                                trainerId: this.user.id,
+                                slots: slots
+                            })
                         });
-                        current = slotEnd;
+
+                        if (res.ok) {
+                            this.notify('稼働枠を登録しました');
+                            this.loadTrainerSlots();
+                            if (this.selectedDate === this.availDate) this.loadAvailableSlots();
+                        } else {
+                            const err = await res.json();
+                            this.notify(err.detail, 'error');
+                        }
+                    } catch (err) {
+                        this.notify('登録中にエラーが発生しました', 'error');
+                    } finally {
+                        this.isLoading.submit = false;
                     }
+                },
 
-                    const res = await fetch('/api/availabilities/', {
-                        method: 'POST',
-                        headers: { 
-                            'Content-Type': 'application/json',
-                            'Authorization': `Bearer ${this.token}`
-                        },
-                        body: JSON.stringify({
-                            trainerId: this.user.id,
-                            slots: slots
-                        })
-                    });
-
-                    if (res.ok) {
-                        alert('稼働枠を登録しました');
-                        this.loadTrainerSlots();
-                        if (this.selectedDate === this.availDate) this.loadAvailableSlots();
-                    } else {
-                        const err = await res.json();
-                        alert(err.detail);
+                async copyLastWeek() {
+                    if (!this.availDate) return this.notify('日付を選択してください', 'error');
+                    
+                    this.isLoading.submit = true;
+                    try {
+                        const res = await fetch(`/api/availabilities/copy-last-week?target_date=${this.availDate}`, {
+                            method: 'POST',
+                            headers: { 'Authorization': `Bearer ${this.token}` }
+                        });
+                        
+                        if (res.ok) {
+                            const data = await res.json();
+                            if (data.copied_count > 0) {
+                                this.notify(`${data.copied_count}件の枠をコピーしました`);
+                                this.loadTrainerSlots();
+                            } else {
+                                this.notify('コピーできる枠が見つからないか、既に登録済みです', 'info');
+                            }
+                        } else {
+                            const err = await res.json();
+                            this.notify(err.detail, 'error');
+                        }
+                    } catch (err) {
+                        this.notify('コピー中にエラーが発生しました', 'error');
+                    } finally {
+                        this.isLoading.submit = false;
                     }
                 },
 
                 async confirmReservation(slot) {
-                    if (!confirm(`${this.selectedDate} ${slot.time} から ${this.selectedCourse}分 のセッションを予約しますか？\n(前日24時以降のキャンセルはできません)`)) return;
-                    
-                    const res = await fetch('/api/reservations/', {
-                        method: 'POST',
-                        headers: { 
-                            'Content-Type': 'application/json',
-                            'Authorization': `Bearer ${this.token}`
-                        },
-                        body: JSON.stringify({
-                            trainerId: slot.trainerId,
-                            date: this.selectedDate,
-                            startTime: slot.time,
-                            courseMinutes: this.selectedCourse,
-                            startAt: slot.startAt
-                        })
-                    });
+                    this.confirmDialog(
+                        '予約の確定',
+                        `${this.selectedDate} ${slot.time} から ${this.selectedCourse}分 のセッションを予約しますか？\n(前日24時以降のキャンセルはできません)`,
+                        '予約を確定する',
+                        async () => {
+                            this.isLoading.submit = true;
+                            try {
+                                const res = await fetch('/api/reservations/', {
+                                    method: 'POST',
+                                    headers: { 
+                                        'Content-Type': 'application/json',
+                                        'Authorization': `Bearer ${this.token}`
+                                    },
+                                    body: JSON.stringify({
+                                        trainerId: slot.trainerId,
+                                        date: this.selectedDate,
+                                        startTime: slot.time,
+                                        courseMinutes: this.selectedCourse,
+                                        startAt: slot.startAt
+                                    })
+                                });
 
-                    if (res.ok) {
-                        await this.loadMyReservations();
-                        await this.loadAvailableSlots();
-                        alert('予約が完了しました');
-                    } else {
-                        const err = await res.json();
-                        alert(err.detail);
-                    }
+                                if (res.ok) {
+                                    await this.loadMyReservations();
+                                    await this.loadAvailableSlots();
+                                    this.notify('予約が完了しました');
+                                } else {
+                                    const err = await res.json();
+                                    this.notify(err.detail, 'error');
+                                }
+                            } catch (err) {
+                                this.notify('予約中にエラーが発生しました', 'error');
+                            } finally {
+                                this.isLoading.submit = false;
+                            }
+                        }
+                    );
                 },
 
                 get nextReservation() {
@@ -561,22 +832,78 @@
                     });
                 },
 
-                async cancelReservation(id) {
-                    if (!confirm('予約をキャンセルしますか？\n(前日24時を過ぎている場合はキャンセルできません)')) return;
+                get weeklyStats() {
+                    if (this.user?.role !== 'trainer') return null;
+                    const now = new Date();
+                    now.setHours(0,0,0,0);
+                    const weekEnd = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
                     
-                    const res = await fetch(`/api/reservations/${id}/cancel`, {
-                        method: 'POST',
-                        headers: { 'Authorization': `Bearer ${this.token}` }
+                    const next7DaysReservations = this.myReservations.filter(res => {
+                        const d = new Date(res.date);
+                        return d >= now && d <= weekEnd && res.status === 'active';
                     });
 
-                    if (res.ok) {
-                        await this.loadMyReservations();
-                        await this.loadAvailableSlots();
-                        alert('キャンセルしました');
-                    } else {
-                        const err = await res.json();
-                        alert(err.detail);
+                    return {
+                        count: next7DaysReservations.length,
+                        totalMinutes: next7DaysReservations.reduce((acc, res) => acc + (res.courseMinutes || 0), 0)
+                    };
+                },
+
+                async loadQuickAvailableSlots() {
+                    if (this.user?.role !== 'trainee') return;
+                    
+                    const today = new Date();
+                    today.setHours(0,0,0,0);
+                    const range = [];
+                    for (let i = 0; i < 7; i++) {
+                        const d = new Date(today.getTime() + i * 24 * 60 * 60 * 1000);
+                        range.push(d.toISOString().split('T')[0]);
                     }
+                    this.quickAvailDateRange = range;
+                    
+                    try {
+                        const results = await Promise.all(range.slice(0, 3).map(async date => {
+                            const res = await fetch(`/api/availabilities/?date=${date}`, {
+                                headers: { 'Authorization': `Bearer ${this.token}` }
+                            });
+                            const slots = await res.json();
+                            return { date, slots: slots.filter(s => !s.isBooked).slice(0, 4) };
+                        }));
+                        this.quickAvailSlots = results;
+                    } catch (err) {
+                        console.error("loadQuickAvailableSlots error:", err);
+                    }
+                },
+
+                async cancelReservation(id) {
+                    this.confirmDialog(
+                        '予約のキャンセル',
+                        '予約をキャンセルしますか？前日24時を過ぎている場合はキャンセルできません。',
+                        'キャンセルを実行',
+                        async () => {
+                            this.isLoading.submit = true;
+                            try {
+                                const res = await fetch(`/api/reservations/${id}/cancel`, {
+                                    method: 'POST',
+                                    headers: { 'Authorization': `Bearer ${this.token}` }
+                                });
+
+                                if (res.ok) {
+                                    await this.loadMyReservations();
+                                    await this.loadAvailableSlots();
+                                    this.notify('予約をキャンセルしました');
+                                } else {
+                                    const err = await res.json();
+                                    this.notify(err.detail, 'error');
+                                }
+                            } catch (err) {
+                                this.notify('通信エラーが発生しました', 'error');
+                            } finally {
+                                this.isLoading.submit = false;
+                            }
+                        },
+                        true
+                    );
                 },
 
                 // カレンダー関連
@@ -609,7 +936,39 @@
                 },
 
                 prevMonth() { this.currentDate = new Date(this.currentDate.setMonth(this.currentDate.getMonth() - 1)); },
-                nextMonth() { this.currentDate = new Date(this.currentDate.setMonth(this.currentDate.getMonth() + 1)); }
+                nextMonth() { this.currentDate = new Date(this.currentDate.setMonth(this.currentDate.getMonth() + 1)); },
+
+                // ユーティリティ
+                notify(message, type = 'success') {
+                    const id = Date.now();
+                    this.notifications.push({ id, message, type, show: true });
+                    setTimeout(() => {
+                        const index = this.notifications.findIndex(n => n.id === id);
+                        if (index > -1) this.notifications[index].show = false;
+                        setTimeout(() => {
+                            this.notifications = this.notifications.filter(n => n.id !== id);
+                        }, 500);
+                    }, 3000);
+                },
+
+                confirmDialog(title, message, confirmText, action, danger = false) {
+                    this.modal = {
+                        show: true,
+                        title,
+                        message,
+                        confirmText,
+                        confirmAction: action,
+                        danger
+                    };
+                },
+
+                isDeadlinePassed(dateStr) {
+                    const today = new Date();
+                    today.setHours(0,0,0,0);
+                    const targetDate = new Date(dateStr);
+                    // 前日の24時（当日0時）が期限
+                    return today >= targetDate;
+                }
             }
         }
     </script>

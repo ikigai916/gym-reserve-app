@@ -58,6 +58,69 @@ async def create_availabilities(
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"稼働枠登録エラー: {str(e)}")
 
+@router.post("/copy-last-week")
+async def copy_last_week_availabilities(
+    target_date: str,
+    current_trainer: dict = Depends(get_current_trainer)
+):
+    """前週の同じ曜日の稼働枠をコピー"""
+    try:
+        # 1. 前週の同じ曜日を計算
+        target_dt = datetime.fromisoformat(f"{target_date}T00:00:00")
+        last_week_dt = target_dt - timedelta(days=7)
+        last_week_end_dt = last_week_dt + timedelta(days=1)
+        
+        # 2. 前週の稼働枠を取得
+        availabilities_collection = db.collection("availabilities")
+        last_week_slots = availabilities_collection\
+            .where(filter=FieldFilter("trainerId", "==", current_trainer["id"]))\
+            .where(filter=FieldFilter("startAt", ">=", last_week_dt))\
+            .where(filter=FieldFilter("startAt", "<", last_week_end_dt))\
+            .stream()
+        
+        # 3. 今日の既存枠を取得（重複防止）
+        target_end_dt = target_dt + timedelta(days=1)
+        existing_docs = availabilities_collection\
+            .where(filter=FieldFilter("trainerId", "==", current_trainer["id"]))\
+            .where(filter=FieldFilter("startAt", ">=", target_dt))\
+            .where(filter=FieldFilter("startAt", "<", target_end_dt))\
+            .stream()
+        
+        existing_starts = {doc.to_dict()["startAt"].isoformat() if isinstance(doc.to_dict()["startAt"], datetime) else doc.to_dict()["startAt"] for doc in existing_docs}
+
+        # 4. コピー作成
+        batch = db.batch()
+        count = 0
+        for doc in last_week_slots:
+            data = doc.to_dict()
+            
+            # 時間部分を維持しつつ日付をターゲット日に変更
+            # data["startAt"] は datetime オブジェクト
+            old_start = data["startAt"]
+            old_end = data["endAt"]
+            
+            new_start = datetime.combine(target_dt.date(), old_start.time())
+            new_end = datetime.combine(target_dt.date(), old_end.time())
+            
+            if new_start.isoformat() in existing_starts:
+                continue
+                
+            new_ref = availabilities_collection.document()
+            batch.set(new_ref, {
+                "trainerId": current_trainer["id"],
+                "startAt": new_start,
+                "endAt": new_end,
+                "isBooked": False
+            })
+            count += 1
+            
+        if count > 0:
+            batch.commit()
+            
+        return {"status": "success", "copied_count": count}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"コピーエラー: {str(e)}")
+
 @router.get("/", response_model=List[AvailabilityResponse])
 async def get_availabilities(date: str, trainer_id: str = None):
     """指定日の稼働枠を取得（30分単位の生データ）"""
