@@ -1,23 +1,29 @@
-from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware
-from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse
+import sys
 import os
 import logging
-import sys
 
 # ロギング設定を一番最初に行う
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
-    handlers=[logging.StreamHandler(sys.stdout)]
+    stream=sys.stdout
 )
 logger = logging.getLogger(__name__)
 
-logger.info("Application starting process...")
+logger.info("Application starting...")
 
-from app.api.router import api_router
-from app.core.config import settings
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
+
+try:
+    from app.api.router import api_router
+    from app.core.config import settings
+    logger.info("Modules imported successfully")
+except Exception as e:
+    logger.error(f"Error during module import: {e}", exc_info=True)
+    raise e
 
 app = FastAPI(title=settings.PROJECT_NAME)
 

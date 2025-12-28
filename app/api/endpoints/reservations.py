@@ -57,7 +57,8 @@ async def create_reservation(
                 .where(filter=FieldFilter("startAt", "<", end_dt))\
                 .order_by("startAt")
             
-            avail_docs = list(avail_query.stream(transaction=transaction))
+            # トランザクション内では stream() ではなく get() を使用する
+            avail_docs = list(avail_query.get(transaction=transaction))
             
             # スロットが足りているかチェック
             if len(avail_docs) < num_slots:
@@ -165,11 +166,11 @@ async def cancel_reservation(
             
             # 2. 関連する Availability を解放
             if "startAt" in res_data and "endAt" in res_data:
-                # 新しい形式のデータ（Timestamp オブジェクト）
+                # 新しい形式のデータ（Timestamp または datetime オブジェクト）
                 start_dt = res_data["startAt"]
                 end_dt = res_data["endAt"]
             else:
-                # 旧データ互換: 文字列からパース（タイムゾーンに注意）
+                # 旧データ互換: 文字列からパース
                 start_dt = datetime.fromisoformat(f"{res_data['date']}T{res_data['startTime']}:00")
                 end_dt = start_dt + timedelta(minutes=res_data["courseMinutes"])
             
@@ -178,7 +179,8 @@ async def cancel_reservation(
                 .where(filter=FieldFilter("startAt", ">=", start_dt))\
                 .where(filter=FieldFilter("startAt", "<", end_dt))
             
-            avail_docs = avail_query.stream(transaction=transaction)
+            # トランザクション内では stream() ではなく get() を使用する
+            avail_docs = list(avail_query.get(transaction=transaction))
             for doc in avail_docs:
                 transaction.update(doc.reference, {"isBooked": False})
         

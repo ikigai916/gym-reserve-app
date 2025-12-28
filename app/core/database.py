@@ -44,6 +44,9 @@ class FirestoreProxy:
     def collection(self, *args, **kwargs):
         return get_db().collection(*args, **kwargs)
 
+    def document(self, *args, **kwargs):
+        return get_db().document(*args, **kwargs)
+
     def transaction(self, *args, **kwargs):
         return get_db().transaction(*args, **kwargs)
 
