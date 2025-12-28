@@ -1,10 +1,14 @@
-from fastapi import APIRouter, HTTPException, Depends
-from datetime import datetime, time, timedelta
+import os
+import logging
+from datetime import datetime, timedelta
 from typing import List
+from fastapi import APIRouter, HTTPException, Depends
+from google.cloud import firestore
 from google.cloud.firestore_v1.base_query import FieldFilter
-from app.schemas.availability import AvailabilityCreate, AvailabilityResponse, AvailabilityBase
+
 from app.core.database import db
 from app.core.auth import get_current_trainer
+from app.schemas.availability import AvailabilityCreate, AvailabilityResponse
 
 router = APIRouter()
 
@@ -22,25 +26,45 @@ async def create_availabilities(
         availabilities_collection = db.collection("availabilities")
         results = []
         
-        # 既存の枠を取得して重複チェック
+        # 既存の枠を取得して重複チェック (タイムスタンプで比較し、精度と型不整合を回避)
         start_times = [slot.startAt for slot in data.slots]
+        if not start_times:
+            return []
+            
         min_start = min(start_times)
         max_start = max(start_times)
         
+        # 余裕を持って前後1分広げて検索
+        search_start = min_start - timedelta(minutes=1)
+        search_end = max_start + timedelta(minutes=1)
+        
         existing_docs = availabilities_collection\
             .where(filter=FieldFilter("trainerId", "==", data.trainerId))\
-            .where(filter=FieldFilter("startAt", ">=", min_start))\
-            .where(filter=FieldFilter("startAt", "<=", max_start))\
+            .where(filter=FieldFilter("startAt", ">=", search_start))\
+            .where(filter=FieldFilter("startAt", "<=", search_end))\
             .stream()
             
-        existing_starts = {doc.to_dict()["startAt"].isoformat() if isinstance(doc.to_dict()["startAt"], datetime) else doc.to_dict()["startAt"] for doc in existing_docs}
+        existing_starts = set()
+        for doc in existing_docs:
+            d = doc.to_dict()
+            st = d.get("startAt")
+            if isinstance(st, datetime):
+                # 秒単位で丸めて比較
+                existing_starts.add(st.replace(microsecond=0).timestamp())
+            elif isinstance(st, str):
+                try:
+                    dt = datetime.fromisoformat(st.replace('Z', '+00:00'))
+                    existing_starts.add(dt.replace(microsecond=0).timestamp())
+                except ValueError:
+                    continue
 
         # バッチ処理で登録
         batch = db.batch()
+        count = 0
         for slot in data.slots:
-            # 重複チェック (ISO文字列で比較)
-            slot_start_iso = slot.startAt.isoformat() if isinstance(slot.startAt, datetime) else slot.startAt
-            if slot_start_iso in existing_starts:
+            # 重複チェック (秒単位で比較)
+            slot_ts = slot.startAt.replace(microsecond=0).timestamp()
+            if slot_ts in existing_starts:
                 continue
 
             doc_ref = availabilities_collection.document()
@@ -52,8 +76,12 @@ async def create_availabilities(
             }
             batch.set(doc_ref, slot_data)
             results.append(AvailabilityResponse(id=doc_ref.id, **slot_data))
+            count += 1
+            # 二重登録防止のため、追加した分も existing_starts に入れる
+            existing_starts.add(slot_ts)
         
-        batch.commit()
+        if count > 0:
+            batch.commit()
         return results
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"稼働枠登録エラー: {str(e)}")
@@ -170,4 +198,3 @@ async def delete_availability(
         return {"status": "success", "id": availability_id}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
-
