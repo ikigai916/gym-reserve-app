@@ -1,19 +1,24 @@
 # 実装ログ (IMPLEMENTATION LOG)
 
-## 2025-12-28: availabilities.py の SyntaxError 修正
+## 2025-12-28: 予約取得エラーの解消とトレーニーへの次回予約表示
 
 ### 変更の背景
-- Cloud Run でのデプロイが継続して失敗しており、ログを確認したところ `app/api/endpoints/availabilities.py` の 108 行目付近で `SyntaxError: invalid syntax` が発生していた。
+- **バグ**: トレーニーがログインした際、「予約情報の取得に失敗しました」というエラーが発生。Firestore の `order_by` クエリに対して複合インデックスが不足していた。
+- **課題**: トレーニー画面に「次回のセッション」カードが表示されないロジック上の制限があった。
 
 ### 主要な変更点
-1. **インデントの修正**:
-   - `delete_availability` 関数内において、`doc_ref.delete()` および `return` 処理、そして `except` ブロックが `if data["isBooked"]` の中に誤ってインデントされていたのを修正。
+1. **インデックスエラーの回避 (バックエンド)**:
+   - `app/api/endpoints/reservations.py` の `get_reservations` から `order_by("createdAt", ...)` を削除。
+   - すでにフロントエンド側で並び替えロジックを実装済みのため、インデックス作成を待たずに正常にデータを取得できるようにした。
+2. **トレーニー向け次回予約表示 (フロントエンド)**:
+   - `app/static/index.html` の `nextReservation` getter からトレーナー限定のロールチェックを削除。
+   - トレーニーでも、自身が入れた一番近い未来の予約が表示されるようにした。
 
 ### 技術的決定
-- 単純な記述ミスであったため、修正後に即座にプッシュし、デプロイの正常動作を確認。
+- Firestore のインデックス管理の煩雑さを避けるため、ソート処理をフロントエンドに完全に委ねる設計とした。
 
 ---
 
-## 2025-12-28: Cloud Run 起動エラーの徹底修正（パッケージ構成と依存関係の修正）
+## 2025-12-28: availabilities.py の SyntaxError 修正
 
 ... (以降、既存のログ)
