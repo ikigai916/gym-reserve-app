@@ -114,7 +114,7 @@ async def get_reservations(current_user: dict = Depends(get_current_user)):
             # 一般会員は自分の予約のみ
             query = query.where(filter=FieldFilter("userId", "==", current_user["id"]))
             
-        docs = query.order_by("createdAt", direction=firestore.Query.DESCENDING).stream()
+        docs = query.stream()
         
         results = []
         for doc in docs:

@@ -531,7 +531,7 @@
                 },
 
                 get nextReservation() {
-                    if (this.user?.role !== 'trainer') return null;
+                    if (!this.user) return null;
                     const now = new Date();
                     const upcoming = this.myReservations
                         .filter(res => res.status === 'active')
