@@ -192,7 +192,7 @@
                         <div class="flex items-start gap-4">
                             <div class="bg-white rounded-2xl p-3 text-center min-w-[80px] shadow-sm border border-indigo-100">
                                 <div class="text-[10px] text-stone-400 font-bold uppercase" x-text="nextReservation.date.split('-').slice(1).join('/')"></div>
-                                <div class="text-xl font-bold text-indigo-600" x-text="nextReservation.startTime"></div>
+                                <div class="text-xl font-bold text-indigo-600" x-text="formatStartTime(nextReservation)"></div>
                             </div>
                             <div>
                                 <div class="text-lg font-medium text-stone-800" x-text="nextReservation.user_name + ' 様'"></div>
@@ -246,7 +246,7 @@
                                 <div class="flex justify-between items-start mb-3">
                                     <div class="flex flex-col">
                                         <span class="text-[10px] font-bold text-stone-400 uppercase" x-text="res.date"></span>
-                                        <span class="text-lg font-bold text-stone-800" x-text="res.startTime + ' - ' + res.endTime"></span>
+                                        <span class="text-lg font-bold text-stone-800" x-text="formatReservationTime(res)"></span>
                                     </div>
                                     <template x-if="index === 0">
                                         <span class="text-[8px] font-bold text-indigo-500 bg-white px-2 py-0.5 rounded-full border border-indigo-100 shadow-sm uppercase tracking-tighter animate-pulse">Next</span>
@@ -578,7 +578,7 @@
                             </div>
 
                             <div class="flex items-end justify-between mb-4">
-                                <div class="text-xl font-bold text-stone-800" x-text="res.startTime + ' - ' + res.endTime"></div>
+                                <div class="text-xl font-bold text-stone-800" x-text="formatReservationTime(res)"></div>
                                 <div class="text-[10px] font-medium text-stone-500" x-text="res.courseMinutes + '分'"></div>
                             </div>
 
@@ -814,6 +814,26 @@
                     const date = new Date(isoString);
                     return date.getHours().toString().padStart(2, '0') + ':' + 
                            date.getMinutes().toString().padStart(2, '0');
+                },
+
+                formatReservationTime(res) {
+                    // startAt / endAt があれば正確な時刻（ブラウザのローカル時間）を表示
+                    if (res.startAt && res.endAt) {
+                        const start = new Date(res.startAt);
+                        const end = new Date(res.endAt);
+                        const fmt = d => d.getHours().toString().padStart(2, '0') + ':' + d.getMinutes().toString().padStart(2, '0');
+                        return fmt(start) + ' - ' + fmt(end);
+                    }
+                    // フォールバック: 保存されている文字列を使用
+                    return (res.startTime || '??:??') + ' - ' + (res.endTime || '??:??');
+                },
+
+                formatStartTime(res) {
+                    if (res.startAt) {
+                        const d = new Date(res.startAt);
+                        return d.getHours().toString().padStart(2, '0') + ':' + d.getMinutes().toString().padStart(2, '0');
+                    }
+                    return res.startTime || '??:??';
                 },
 
                     async deleteSlot(id) {
