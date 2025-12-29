@@ -82,35 +82,35 @@ async def create_reservation(
                 if doc.to_dict().get("isBooked"):
                     raise HTTPException(status_code=400, detail="既に予約されている時間枠が含まれています")
             
-        # 2. Reservation ドキュメントの作成
-        now = datetime.now().isoformat()
-        
-        # 表示用の終了時刻を計算 (JSTの開始時刻文字列から計算)
-        try:
-            start_h, start_m = map(int, res.startTime.split(':'))
-            temp_dt = datetime(2000, 1, 1, start_h, start_m) + timedelta(minutes=res.courseMinutes)
-            display_end_time = temp_dt.strftime("%H:%M")
-        except:
-            # 念のためUTCからの変換もフォールバックとして用意
-            jst_end = end_dt + timedelta(hours=9)
-            display_end_time = jst_end.strftime("%H:%M")
+            # 2. Reservation ドキュメントの作成
+            now = datetime.now().isoformat()
+            
+            # 表示用の終了時刻を計算 (JSTの開始時刻文字列から計算)
+            try:
+                start_h, start_m = map(int, res.startTime.split(':'))
+                temp_dt = datetime(2000, 1, 1, start_h, start_m) + timedelta(minutes=res.courseMinutes)
+                display_end_time = temp_dt.strftime("%H:%M")
+            except:
+                # 念のためUTCからの変換もフォールバックとして用意
+                jst_end = end_dt + timedelta(hours=9)
+                display_end_time = jst_end.strftime("%H:%M")
 
-        res_ref = db.collection("reservations").document()
-        res_data = {
-            "userId": current_user["id"],
-            "user_name": current_user["name"],
-            "trainerId": res.trainerId,
-            "date": res.date,
-            "startTime": res.startTime,
-            "endTime": display_end_time,
-            "courseMinutes": res.courseMinutes,
-            "status": "active",
-            "startAt": start_dt,
-            "endAt": end_dt,
-            "createdAt": now,
-            "updatedAt": now
-        }
-        transaction.set(res_ref, res_data)
+            res_ref = db.collection("reservations").document()
+            res_data = {
+                "userId": current_user["id"],
+                "user_name": current_user["name"],
+                "trainerId": res.trainerId,
+                "date": res.date,
+                "startTime": res.startTime,
+                "endTime": display_end_time,
+                "courseMinutes": res.courseMinutes,
+                "status": "active",
+                "startAt": start_dt,
+                "endAt": end_dt,
+                "createdAt": now,
+                "updatedAt": now
+            }
+            transaction.set(res_ref, res_data)
             
             # 3. Availability の更新
             for doc in avail_docs:
@@ -118,6 +118,7 @@ async def create_reservation(
             
             return res_ref.id, res_data
 
+        # トランザクションの実行
         res_id, res_data = create_in_transaction(transaction)
         
         return ReservationResponse(id=res_id, **res_data)
