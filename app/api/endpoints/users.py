@@ -1,12 +1,93 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Depends
 from datetime import datetime
 from typing import List
-from app.schemas.user import UserCreate, UserUpdate, UserResponse
+from app.schemas.user import UserCreate, UserUpdate, UserResponse, UserPasswordUpdate
 from app.core.database import db
+from app.core.auth import get_current_user, get_password_hash, verify_password
 
 from google.cloud.firestore_v1.base_query import FieldFilter
 
 router = APIRouter()
+
+@router.get("/me", response_model=UserResponse)
+async def get_me(current_user: dict = Depends(get_current_user)):
+    """現在のユーザー情報を取得"""
+    return UserResponse(
+        id=current_user["id"],
+        name=current_user["name"],
+        email=current_user.get("email", ""),
+        phone=current_user.get("phone", ""),
+        role=current_user.get("role", "trainee"),
+        createdAt=current_user.get("createdAt", ""),
+        updatedAt=current_user.get("updatedAt", "")
+    )
+
+@router.patch("/me", response_model=UserResponse)
+async def update_me(user_update: UserUpdate, current_user: dict = Depends(get_current_user)):
+    """現在のユーザー情報を更新"""
+    try:
+        user_id = current_user["id"]
+        doc_ref = db.collection("users").document(user_id)
+        
+        update_data = {}
+        if user_update.name is not None:
+            if not user_update.name.strip():
+                raise HTTPException(status_code=400, detail="名前は空にできません")
+            update_data["name"] = user_update.name.strip()
+        
+        if user_update.email is not None:
+            update_data["email"] = user_update.email.strip() if user_update.email.strip() else ""
+        
+        if user_update.phone is not None:
+            update_data["phone"] = user_update.phone.strip() if user_update.phone.strip() else ""
+        
+        update_data["updatedAt"] = datetime.now().isoformat()
+        
+        doc_ref.update(update_data)
+        
+        updated_doc = doc_ref.get()
+        updated_data = updated_doc.to_dict()
+        
+        return UserResponse(
+            id=updated_doc.id,
+            name=updated_data["name"],
+            email=updated_data.get("email", ""),
+            phone=updated_data.get("phone", ""),
+            role=updated_data.get("role", "trainee"),
+            createdAt=updated_data.get("createdAt", ""),
+            updatedAt=updated_data.get("updatedAt", "")
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"プロフィール更新エラー: {str(e)}")
+
+@router.put("/me/password")
+async def update_password(pw_update: UserPasswordUpdate, current_user: dict = Depends(get_current_user)):
+    """パスワードを更新"""
+    try:
+        user_id = current_user["id"]
+        doc_ref = db.collection("users").document(user_id)
+        
+        # 現在のパスワードを確認
+        user_doc = doc_ref.get()
+        user_data = user_doc.to_dict()
+        
+        if not verify_password(pw_update.current_password, user_data["hashed_password"]):
+            raise HTTPException(status_code=400, detail="現在のパスワードが正しくありません")
+        
+        # 新しいパスワードをハッシュ化して保存
+        new_hashed_password = get_password_hash(pw_update.new_password)
+        doc_ref.update({
+            "hashed_password": new_hashed_password,
+            "updatedAt": datetime.now().isoformat()
+        })
+        
+        return {"status": "success", "message": "パスワードを更新しました"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"パスワード更新エラー: {str(e)}")
 
 @router.get("/", response_model=List[UserResponse])
 async def get_users(role: str = None):

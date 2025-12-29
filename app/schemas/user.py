@@ -26,6 +26,11 @@ class UserUpdate(BaseModel):
     email: Optional[EmailStr] = None
     phone: Optional[str] = None
 
+class UserPasswordUpdate(BaseModel):
+    """パスワード更新スキーマ"""
+    current_password: str
+    new_password: str = Field(..., max_length=72)
+
 class UserResponse(BaseModel):
     """ユーザー応答スキーマ"""
     id: str
